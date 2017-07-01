@@ -1,0 +1,2 @@
+# ApplicationFormModule
+This is an application module for drupal 7 version. The module is a series of information divided into tabs for applicants to fill up. It generate a pdf in the admin. It has an administration view where it can be browse sequentially. The admin can select/deselect and categories each applicantion to a particular branch. Intended for a medical facility in UK. Created under a full application sorting website, this module is just part of the operation of Human resources of the said institution.
