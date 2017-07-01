@@ -1,0 +1,4714 @@
+<?php
+	function application_form_init() {
+		drupal_add_js(drupal_get_path('module', 'application_form').'/mymodule.js');	
+		require('fpdf181/fpdf.php');
+    }
+	
+	function application_form_menu() {
+	$items = array();
+	  $items['jobopeningform'] = array(
+		'title' => 'Job Opening Form',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('application_form_form'),
+		'access callback' => TRUE,
+		);
+
+	  $items['admin/config/people/application_form'] = array(
+		'title' => 'Application Form Admin',
+		'description' => 'Administer the applicants that applied.',
+		'page callback' => 'application_admin',
+		'access arguments' => array('administer application_form'),
+		'type' => MENU_NORMAL_ITEM,
+	  );
+	  
+	  
+	 $items['admin/config/people/application_form/edit/%'] = array(
+		'title' => 'View',
+		'page callback' => 'view_applicants_data',
+		'access arguments' => array('administer application_form'),
+		'type' => MENU_NORMAL_ITEM,
+		'weight' => 0,
+	);
+	
+	 $items['admin/config/people/application_form/print/%'] = array(
+		'title' => 'Print',
+		'page callback' => 'print_applicants_data',
+		'access arguments' => array('administer application_form'),
+		'access callback' => TRUE
+	);
+	
+
+	$items['admin/config/people/application_form/savechanges'] = array(
+		'title' => 'Save',
+		'page callback' => 'save_applicants_changes',
+		'access arguments' => array('administer application_form'),
+		'access callback' => TRUE
+	);
+	  
+	  // The default local task (needed when other modules want to offer,
+	  // alternative CAPTCHA types and their own configuration page as local task).
+	  $items['admin/config/people/application_form/application_form'] = array(
+		'title' => 'CAPTCHA',
+		'access arguments' => array('administer CAPTCHA settings'),
+		'type' => MENU_DEFAULT_LOCAL_TASK,
+		'weight' => -20,
+	  );
+	  
+	
+	  
+	  $items['admin/config/people/application_form/application_form/captcha_point'] = array(
+		'title' => 'CAPTCHA point administration',
+		'file' => 'captcha.admin.inc',
+		'page callback' => 'captcha_point_admin',
+		'page arguments' => array(6, 7),
+		'access arguments' => array('administer CAPTCHA settings'),
+		'type' => MENU_CALLBACK,
+	  );
+	  return $items;
+	}
+	
+
+/**
+ * Implements hook_permission().
+ * Permissions for dynamic banner
+ */
+function application_form_permission() {
+  return array(
+    'administer application_form' => array(
+      'title' => t('administer application_form'),
+      'description' => t('Allows users to change what banners are displayed and to create thier own'),
+    ),
+  );
+}
+// end permission function	
+
+
+function application_admin(){
+
+//GET THE USER ROLES
+global $user;
+$gg = $GLOBALS['user']->roles;
+//print_r($GLOBALS['user']->roles);
+$userdepartment =  end($gg); 
+$userdepartment = explode('-', $userdepartment);
+$userdepartment =  $userdepartment[1];
+$userdepartment = rtrim($userdepartment);
+
+//echo $userdepartment;
+
+	$page_content = '';
+	
+		//MOVE TO ARCHIVE ****************************************************************************************************************//
+		
+		if($userdepartment == '' or $userdepartment == 'Cawston Park' ){
+			$page_content .= '<div id="movetoarchive">';
+			$page_content .= '<input type="submit" value="Move downloaded data to archives"   form="movetoarchive_submit" name="movetoarchiveSubmit" id="movetoarchive" >';  
+			//$page_content .= '<p>Put all the downloaded data to archive, remove from the list</p> ';
+			$page_content .= '</div >';
+		}
+		
+		$page_content  .= '<form id="movetoarchive_submit" name="movetoarchive_submit" method="post" action="" id="movetoarchive">';
+		$page_content  .= '</form >';
+		
+		if (isset($_POST['movetoarchiveSubmit'])) {
+			movetoarchived();
+		}
+		//MOVE TO ARCHIVE ***************************************************************************************************************//
+		
+		//GET THE DATA ID TO DOWNLOAD AND CALL FUNCTION downloaddata($dataid)****************************************//
+		
+		$page_content .= ' <input type="submit" value="Download to file" class="downloadbutt"  form="formdownload_Submit" name="formdownloadSubmit" id="downloadbutton" >';  
+		$page_content .= ' <input type="submit" value="Download to file" class="downloadbutt"  form="formdownload_Submit" name="formdownloadSubmit" id="downloadbutton_second" >';  
+		$page_content .= ' <input type="submit" value="Download to file" class="downloadbutt"  form="formdownload_Submit" name="formdownloadSubmit" id="downloadbutton_third" >';  
+		
+		if (isset($_POST['formdownloadSubmit'])) {
+			 $aDoor = $_POST['download'];
+			  //$page_content .= print_r($aDoor);
+			  foreach ($aDoor as $value => $dataid) {
+				 //$page_content .= print_r($value);
+				 downloaddata($dataid);
+			}
+		}
+		
+		//GET THE DATA ID TO DOWNLOAD AND CALL FUNCTION downloaddata($dataid)****************************************//
+		
+		
+		
+		//START OF THE TABS*************************************************************//
+		$page_content .= '<div id="tabcontainer ">';
+		$page_content .= '<ul class="tabs">';
+		$page_content .= '<li>';
+        $page_content .= '<input type="radio" name="tabs" id="tab1" class="tcradio" checked />';
+		
+		//FIRST TAB***********************************************************************************************************************************************************************************//
+        $page_content .= '<label for="tab1" >New Applicants</label>';
+        $page_content .= '<div id="tab-content1" class="tab-content">';
+		
+		
+
+		if (isset($_POST['selectsearch'])) {
+			$searchfield = $_POST['selectsearch'];
+			$searchcriteria = $_POST['textfield'];
+			
+			switch ($searchfield) {
+				case job_title:
+					if($searchcriteria != 'all'){
+						$page_content .= $searchcriteria;
+						$q = db_query('SELECT * FROM {application_form} WHERE job_title LIKE :job_title', array(':job_title' => db_like($searchcriteria) . '%'));
+					}else{
+						$q = db_query('SELECT * FROM {application_form}');
+					}
+					break;
+				case job_location:
+					if($searchcriteria != 'all'){
+						$page_content .= $searchcriteria;
+						$q = db_query('SELECT * FROM {application_form} WHERE job_location LIKE :job_location', array(':job_location' => db_like($searchcriteria) . '%'));
+					}else{
+						$q = db_query('SELECT * FROM {application_form}');
+					}
+					break;
+				case email_add:
+					if($searchcriteria != 'all'){
+						$page_content .= $searchcriteria;
+						$q = db_query('SELECT * FROM {application_form} WHERE email_add LIKE :email_add', array(':email_add' => db_like($searchcriteria) . '%'));
+					}else{
+						if( isset($_GET{'page'} ) )
+						 {
+							$page = $_GET{'page'} + 1;
+							$offset = $offset + 10 ;
+							$offset = $offset * $page;
+						 }
+						 else
+						 {
+							$page = 0;
+							$offset = 0;
+						 }
+						
+						$query = db_select('application_form', 'u');
+						$query->condition('u.suitable', 'NULL', '=');
+						//$query->condition('u.downloaded', 0, '=');
+						if($userdepartment != ''  and $userdepartment != 'Cawston Park'){
+							$query->condition('u.assigned_dept', $userdepartment, '=');
+						}
+						$query->fields('u');
+						$query ->orderBy('appid', 'DESC'); 
+						$query->range($offset, 10);
+						$q = $query->execute();
+					};
+					break;
+				case all:
+					if( isset($_GET{'page'} ) )
+					 {
+						$page = $_GET{'page'} + 1;
+						$offset = $offset + 10 ;
+						$offset = $offset * $page;
+					 }
+					 else
+					 {
+						$page = 0;
+						$offset = 0;
+					 }
+					
+						$query = db_select('application_form', 'u');
+						$query->condition('u.suitable', 'NULL', '=');
+						//$query->condition('u.downloaded', 0, '=');
+						if($userdepartment != '' and $userdepartment != 'Cawston Park'){
+							$query->condition('u.assigned_dept', $userdepartment, '=');
+						}
+						$query->fields('u');
+						$query ->orderBy('appid', 'DESC'); 
+						$query->range($offset, 10);
+						$q = $query->execute();
+					break;
+			}
+		}else{
+			if( isset($_GET{'page'} ) )
+			 {
+				$page = $_GET{'page'} + 1;
+				$offset = $offset + 10 ;
+				$offset = $offset * $page;
+			 }
+			 else
+			 {
+				$page = 0;
+				$offset = 0;
+			 }
+			
+			$query = db_select('application_form', 'u');
+					$query->condition('u.suitable', 'NULL', '=');
+					//$query->condition('u.downloaded', 0, '=');
+					if($userdepartment != '' and $userdepartment != 'Cawston Park'){
+						$query->condition('u.assigned_dept', $userdepartment, '=');
+					}
+					$query->fields('u');
+					$query ->orderBy('appid', 'DESC'); 
+					$query ->range($offset, 10);
+					$q = $query->execute();
+		}
+
+		
+		//GET THE HR ADMIN POST IF SUITABLE, NOT SUITABLE OR REASSIGNED*************************//
+		if (isset($_POST['suitableoption'])) {
+			$suitableoption_value = $_POST["suitableoption"];
+			$notsuitcomments = $_POST["notsuitcomments"];	
+			$cv = explode("_",$suitableoption_value);
+			$cvsuitable = $cv[0];
+			$cvrecordnumber = $cv[1];
+			$page_content  .= $cvrecordnumber;
+			$page_content  .= $cvsuitable;
+			saves_suitableoption($cvrecordnumber, $cvsuitable, $notsuitcomments);
+		}
+	
+		if (isset($_POST['assignedjob_dept'])) {
+			$assignedjobdept_values = $_POST['assignedjob_dept'];
+			$adv = explode("_",$assignedjobdept_values);
+			$adv_value = $adv[0];
+			$adv_recordnumber = $adv[1];
+			//GET THE ASSIGNED JOB
+			
+			if (isset($_POST['assignedjob_selects'])) {
+				$assignedjob_values = $_POST['assignedjob_selects'];
+				if ($assignedjob_values != 'nochange'){
+					saves_assignedjob_job($adv_value,  $adv_recordnumber, $assignedjob_values);
+				}
+			}
+			saves_assignedjob($adv_value,  $adv_recordnumber);
+			drupal_goto("admin/config/people/application_form", array('fragment' => $node->nid));
+		}
+		
+		//*************************//
+
+	   $page_content  .= 'Sort By email  (type "all" to view all application)';
+	   
+		$page_content  .= '<form name="form1" method="post" action="" id="application_search">';
+		$page_content  .= '<select name="selectsearch" id="selectsearch">';
+		$page_content  .= ' <option value="all">Show All</option>';
+		$page_content  .= ' <option value="job_title">Job Title</option>';
+		$page_content  .= ' <option value="job_location">Location</option>';
+		$page_content  .= ' <option value="email_add">Email Address</option>';
+		$page_content  .= '</select>';
+		$page_content  .= '<input type="text" name="textfield" id="textfield">';
+		$page_content  .= '<input type="submit" name="button" id="button" value="Submit">';
+		
+		$page_content  .= '</form>';
+		 
+		 $page_content .= '<h1>Applicants List</h1>';
+		$page_content .= 'Sorted from the latest applicants';
+		$page_content .= '<table id="applicantstbl">'; 
+		$page_content .= '<tr style="background-color:#f6653c;  color:#fff; font-weight:bold; text-align:center">';  
+		$page_content .= '<td style="border-right:1px solid #ccc; "   >';
+		$page_content .= '<strong>Select</strong> ' ; 	
+		$page_content  .= '<div id="checkall" onclick="checkall()">All</div>';
+		$page_content .= '</td>'; 	
+		
+		if($userdepartment != '' and $userdepartment != 'Cawston Park'){
+			$page_content .= '<td style="border-right:1px solid #ccc; width:150px; background:#ccc" >';
+			$page_content .= '<strong>Assigned Department<br/><span style="font-style:italic; color:#fff">(list of all Department)<span></strong>'; 	 
+			$page_content .= '</td>'; 
+			$page_content .= '<td style="border-right:1px solid #ccc; width:150px; background:#ccc">';
+			$page_content .= '<strong>Assigned Job</strong><br/><span style="font-style:italic; color:#fff">(list of Jobs available)<span>'; 	 
+			$page_content .= '</td>'; 
+		}
+		
+		if($userdepartment == '' or $userdepartment == 'Cawston Park'){
+			$page_content .= '<td style="border-right:1px solid #ccc; "   >';
+			$page_content .= '<strong>Suitable</strong>'; 	 
+			$page_content .= '</td>'; 
+			$page_content .= '<td style="border-right:1px solid #ccc;" >';
+			$page_content .= '<strong>Not Suitable</strong>'; 	 
+			$page_content .= '</td>'; 
+			$page_content .= '<td style="border-right:1px solid #ccc; width:150px;" >';
+			$page_content .= '<strong>Assigned Department<br/><span style="font-style:italic; color:#fff">(list of all Department)<span></strong>'; 	 
+			$page_content .= '</td>'; 
+			$page_content .= '<td style="border-right:1px solid #ccc; width:150px">';
+			$page_content .= '<strong>Assigned Job</strong><br/><span style="font-style:italic; color:#fff">(list of Jobs available)<span>'; 	 
+			$page_content .= '</td>'; 
+			$page_content .= '<td style="border:1px solid #ccc; display:none;">';
+			$page_content .= '<strong>ID</strong>'; 	 
+			$page_content .= '</td>'; 
+			$page_content .= '<td style="border:1px solid #ccc;">';
+			$page_content .= '<strong>Save</strong>'; 	 
+			$page_content .= '</td>'; 	
+		}
+		
+		
+		$page_content .= '<td style="border:1px solid #ccc">';
+		$page_content .= '<strong>Job Title<br/><span style="font-style:italic; color:#fff">(applied)<span></strong>'; 	 
+		$page_content .= '</td>'; 
+		$page_content .= '<td style="border:1px solid #ccc">';
+		$page_content .= '<strong>Location</strong>'; 	 
+		$page_content .= '</td>'; 
+		$page_content .= '<td style="border:1px solid #ccc">'; 
+		$page_content .= '<strong>Surname</strong><br><span class="vd">Click to view full data</span>'; 	 
+		$page_content .= '</td>'; 
+		$page_content .= '<td style="border:1px solid #ccc">';
+		$page_content .= '<strong>Name</strong>'; 	 
+		$page_content .= '</td>'; 
+		$page_content .= '<td style="border:1px solid #ccc">';
+		$page_content .= '<strong>Email Address</strong>'; 	 
+		$page_content .= '</td>';
+		$page_content .= '<td style="border:1px solid #ccc">';
+		$page_content .= '<strong>Phone Number</strong>'; 	 
+		$page_content .= '</td>';
+		$page_content .= '<td style="border:1px solid #ccc">';
+		$page_content .= '<strong>Mobile Number</strong>'; 	 
+		$page_content .= '</td>';
+		$page_content .= '<td style="border:1px solid #ccc">';
+		$page_content .= '<strong>File Attachment</strong>'; 	 
+		$page_content .= '</td>';
+		
+		$page_content .= '</tr>';  
+		$info = field_info_field('field_location');
+		$options = $info['settings']['allowed_values'];
+		//print_r($options);
+
+		$result = db_query_range('SELECT n.nid
+						  FROM {node} n WHERE n.type = :ntype', 0, 10, array(':ntype' => 'job_opening'));
+		foreach ($result as $record) {
+			$node = node_load($record->nid);
+			$loc = $node->field_location;
+			foreach ($loc as $lkey=> $locrecord) {
+					$ll = $locrecord[0];
+			}
+		}
+	
+	$reccount  = 0;
+	 foreach ($q as $row) {
+		$rowid = $row->appid;
+		//CHECK THE SUITABLE OPTIONS
+		$suitable_chkr = $row->suitable;
+		
+		
+			//if($suitable_chkr == "suitable"){
+			//	$page_content .= '<tr id="recno'.$rowid.'" style="background:#c8f440">'; 	
+			//}elseif($suitable_chkr == "not-suitable"){
+			//	$page_content .= '<tr id="recno'.$rowid.'" style="background:#e8e5e5">'; 	
+			//}else{
+			//	$page_content .= '<tr id="recno'.$rowid.'" style="background:#fff">'; 	
+			//}
+			$downloaded = $row->downloaded;
+			if($downloaded == 1){
+				$page_content .= '<tr id="recno'.$rowid.'" style="background:#c3cea2">'; 	
+			}else{
+				$page_content .= '<tr id="recno'.$rowid.'" style="background:#fff">'; 	
+			}
+		
+		
+		$page_content  .= '<form id="formdownload_Submit" name="formdownload_Submit" method="post" action="" id="application_download">';
+			$page_content .= '<td style="background-color:#666666; border-bottom:1px solid #fff; border-right:1px solid #fff" align="center">';
+			$page_content .= '<input type="checkbox" name="download[]" id="dchkbox_'.$rowid.'" class="checkbox" form="formdownload_Submit"  value="dchkbox_'.$rowid.'" onclick="showdownloadbutt(\''.$rowid.'\')"> ';
+			$page_content .= '</td>'; 
+		$page_content  .= '</form >';
+		
+	
+		
+		if($userdepartment != '' and $userdepartment != 'Cawston Park'){
+			$page_content .= '<td style="border-right:1px solid #ccc; width:150px; background:#f6f4f4" >';
+			$page_content .= $row->assigned_job; 	 
+			$page_content .= '</td>'; 
+			$page_content .= '<td style="border-right:1px solid #ccc; width:150px; background:#f6f4f4">';
+			$page_content .= $row->assigned_dept; 	 
+			$page_content .= '</td>'; 
+		}
+		
+
+		if($userdepartment == '' or $userdepartment == 'Cawston Park'){
+			$page_content  .= '<form name="form2" method="post" action="" id="application_search">';
+					
+					$page_content .= '<td style="background-color:#666666; border-bottom:1px solid #fff; border-right:1px solid #fff" align="center">';							
+					if($suitable_chkr == 'suitable'){
+						$page_content .= '<input type="radio" name="suitableoption" value="suitable_'.$rowid.'" id="suitable_'.$rowid.'"  checked  /> ';
+					}else{
+						$page_content .= '<input type="radio" name="suitableoption" value="suitable_'.$rowid.'" id="suitable_'.$rowid.'" onclick="suitable(\''.$rowid.'\')"   /> ';
+					}
+					$page_content .= '</td>'; 
+					
+					$page_content .= '<td style="background-color:#666666; border-bottom:1px solid #fff; border-right:1px solid #fff" align="center">';
+					if($suitable_chkr == 'not-suitable'){
+						$page_content .= '<input type="radio" name="suitableoption" value="not-suitable_'.$rowid.'"  id="notsuitable_'.$rowid.'"  checked /> ';
+					}else{
+						$page_content .= '<input type="radio" name="suitableoption" value="not-suitable_'.$rowid.'"  id="notsuitable_'.$rowid.'" onclick="notsuitable(\''.$rowid.'\')" /> ';
+					}
+					$page_content .= '<div id="notsuitcomment_'.$rowid.'" style="display:none; position:absolute; " class="notsuit"><textarea style="border:2px solid #ccc" id="comments_'.$rowid.'" name="notsuitcomments" cols="60" rows="3" class="form-textarea required"></textarea></div>';
+					$page_content .= '</td>'; 
+					
+					$page_content .= '<td style="background-color:#666666; border-bottom:1px solid #fff; border-right:1px solid #fff" align="center">';
+					$page_content .= '<select  style="height:40px; background:#666666; color:#fff" name="assignedjob_dept" id="assignedjob_dept['.$rowid.']"  onclick="reassigned(\''.$rowid.'\')">';
+					$page_content .= '		<option value="nochange" style="background:#e0e0d8; font-weight:bold">Select Department</option>';
+												foreach ($options as $key => $row1) {
+					$page_content .= '	<option value="'.$row1.'_'.$rowid.'" style="background:#f2bd7f;" >'.$row1.'</option>';
+												}
+					$page_content .= '	</select>'; 	 
+					$page_content .= '</td>'; 
+					$page_content .= '<td style="background-color:#666666; border-bottom:1px solid #fff; border-right:1px solid #fff" align="center">';
+					$page_content .= '<select id="assignedjob_select'.$rowid.'" name="assignedjob_selects"   style="height:40px; background:#666666; color:#fff"  disabled="true" onchange="assignedjobdisabled(\''.$rowid.'\')">';
+					$page_content .= '		<option value="nochange">Select Job Title</option>';
+													$result = db_query_range('SELECT n.nid
+													FROM {node} n WHERE n.type = :ntype', 0, 10, array(':ntype' => 'job_opening'));
+													foreach ($result as $record) {
+														$node = node_load($record->nid);
+															$title = $node->title;
+					$page_content .= '			<option value="'.$title.'" style="background:#f2bd7f;">'.$title.'</option>';
+													}
+					$page_content .= '</select>';  
+					$page_content .= '</td>';
+					$page_content .= '<td class="chstd">';
+					$page_content .= ' <input type="submit" value="Submit" class="chs_'.$rowid.'" disabled = "true">';  
+					$page_content .= '</td>'; 
+			$page_content  .= '</form >';
+		}
+		
+		$page_content .= '<td style="display:none;">';
+		$page_content .= $row->appid; 	 
+		$page_content .= '</td>'; 
+		
+		
+
+		$page_content .= '<td style=" ">';
+		$page_content .= $row->job_title; 	 
+		$page_content .= '</td>'; 	
+		$page_content .= '<td style="">';
+		$page_content .= $row->job_location; 	 
+		$page_content .= '</td>';
+		
+		
+		$page_content .= '<td style="border:1px solid #e0e0d8" class="al">';
+		$page_content .= '<a href="application_form/edit/'. $row->appid . '">'.$row->surname.'</a>'; 	
+		$page_content .= '</td>'; 
+		$page_content .= '<td >'; 	
+		$page_content .=  $row->forname;  
+		$page_content .= '</td>'; 		
+		$page_content .= '<td >'; 	
+		$page_content .=  $row->email_add;  
+		$page_content .= '</td>'; 
+		$page_content .= '<td>'; 	
+		$page_content .=  $row->phone_no;  
+		$page_content .= '</td>'; 
+		$page_content .= '<td >'; 	
+		$page_content .=  $row->mobile_no;  
+		$page_content .= '</td>'; 
+		
+		$page_content .= '<td >';  //***GET THE FILE ATTACHMENT LINK WITH THE USERS TABLE
+			
+			$applicantemail = $row->email_add; //GET THE EMAIL ADDRESS
+			
+			$qumail = db_query('SELECT * FROM {users} WHERE mail = :mail', array(':mail' => $applicantemail ));
+			foreach($qumail as $skey1){
+				$skey = $skey1->uid;
+			}
+			
+			$query = db_select('file_usage', 'fu');
+						$query->condition('fu.module', 'file', '=');
+						$query->condition('fu.id', $skey, '=');
+						$query->fields('fu');
+						$qwf = $query->execute();
+			
+			//print_r($qw);
+			
+			foreach ($qwf as $row1f){
+				//print_r($row1f);
+				$skeyfid = $row1f->fid;
+			}
+			
+			
+			$qumailfile = db_query('SELECT * FROM {file_managed} WHERE fid = :fid', array(':fid' => $skeyfid ));
+			foreach($qumailfile as $skeyfile){
+				$skeyfilename = $skeyfile->filename;
+			}
+
+			
+			//$page_content .= $applicantemail .'<br/>';
+			//$page_content .= $skey  .'<br/>';
+			//$page_content .= $skeyfid  .'<br/>';
+			//$page_content .= '<a href=" '.base_path().'sites/default/resume/'.$skeyfilename.' " > '.$skeyfilename  .'</a><br/>';
+			$page_content .= '<a href=" '.base_path().'sites/default/resume/'.$skeyfilename.' " ><img src =" '.base_path().'sites/all/themes/jobsite/images/fd_03.png"/></a><br/>';
+		$page_content .= '</td>';  //***END GET THE FILE ATTACHMENT LINK WITH THE USERS TABLE
+		
+		
+		$page_content .= '</tr>';
+		$reccount = $reccount + 1;
+    }
+	
+	
+		 $page_content .= '</table>'; 	
+		  $page_content .='<div id="hradminnote">You must save the changes before proceeding to the next or previous page</div>';
+		  if( $page > 0)
+         {
+            $last = $page - 2;
+            $page_content .= "<span id='pagingbutton' ><a href=' $_PHP_SELF?page=$last' disabled='true'>Last 10 Records</a> </span>";
+			if( $page > 0 and $reccount != 0 ){
+				$page_content .= "<span id='pagingbutton1'><a href=' $_PHP_SELF?page=$page' disabled='true'>Next 10 Records</a></span>";
+			}
+         }
+	  if( $page == 0 )
+         {
+			 $page = $page + 0;
+			 $offset =$offset + 1 ;
+             $page_content .= "<span id='pagingbutton'><a href=' $_PHP_SELF?page=$page' disabled='true'>Next 10 Records</a></span>";
+			 $page_content .= "<span id='pagingbutton1' style='display:none'><a href=' $_PHP_SELF?page=$page' disabled='true'>Next 10 Records</a></span>";
+		}
+		
+		
+		
+	    $page_content .= '</div>';
+		$page_content .= '</li>';
+			
+		
+		
+		//SECOND TAB******************************************************************************************************************************************************************************************************************//
+		$page_content .= '<li>';
+        $page_content .= ' <input type="radio" name="tabs" id="tab2" class="tcradio" />';
+        $page_content .= '<label for="tab2">Suitable</label>';
+        $page_content .= '<div id="tab-content2" class="tab-content">';
+       
+	   if (isset($_POST['selectsearch'])) {
+			$searchfield = $_POST['selectsearch'];
+			$searchcriteria = $_POST['textfield'];
+			
+			switch ($searchfield) {
+				case job_title:
+					if($searchcriteria != 'all'){
+						$page_content .= $searchcriteria;
+						$q = db_query('SELECT * FROM {application_form} WHERE job_title LIKE :job_title', array(':job_title' => db_like($searchcriteria) . '%'));
+					}else{
+						$q = db_query('SELECT * FROM {application_form}');
+					}
+					break;
+				case job_location:
+					if($searchcriteria != 'all'){
+						$page_content .= $searchcriteria;
+						$q = db_query('SELECT * FROM {application_form} WHERE job_location LIKE :job_location', array(':job_location' => db_like($searchcriteria) . '%'));
+					}else{
+						$q = db_query('SELECT * FROM {application_form}');
+					}
+					break;
+				case email_add:
+					if($searchcriteria != 'all'){
+						$page_content .= $searchcriteria;
+						$q = db_query('SELECT * FROM {application_form} WHERE email_add LIKE :email_add', array(':email_add' => db_like($searchcriteria) . '%'));
+					}else{
+						if( isset($_GET{'page'} ) )
+						 {
+							$page = $_GET{'page'} + 1;
+							//$offset = $offset + 10 ;
+							$offset = $offset * $page;
+						 }
+						 else
+						 {
+							$page = 0;
+							$offset = 0;
+						 }
+							//$q = db_query('SELECT * FROM {application_form} WHERE appid = :appid', array(':appid' => $appd));
+						//$q = db_query('SELECT * FROM {application_form} WHERE suitable = :suitable',  array(':suitable' => 'suitable'));
+						$query = db_select('application_form', 'u');
+						$query->condition('u.suitable', 'suitable', '=');
+						$query->condition('u.downloaded', 2, '!=');
+						if($userdepartment != '' and $userdepartment != 'Cawston Park'){
+							$query->condition('u.assigned_dept', $userdepartment, '=');
+						}
+						$query->fields('u');
+						//$query->range($offset, 10);
+						$query ->orderBy('appid', 'DESC'); 
+						$q = $query->execute();
+						//print_r($result);
+					};
+					break;
+				case all:
+					if( isset($_GET{'page'} ) )
+					 {
+						$page = $_GET{'page'} + 1;
+						//$offset = $offset + 10 ;
+						$offset = $offset * $page;
+					 }
+					 else
+					 {
+						$page = 0;
+						$offset = 0;
+					 }
+					//$q = db_query_range('SELECT * FROM {application_form}',  $offset,10);
+					//$q = db_query('SELECT * FROM {application_form} WHERE suitable = :suitable',  array(':suitable' => 'suitable'));
+					$query = db_select('application_form', 'u');
+					$query->condition('u.suitable', 'suitable', '=');
+					$query->condition('u.downloaded', 2, '!=');
+					if($userdepartment != '' and $userdepartment != 'Cawston Park'){
+						$query->condition('u.assigned_dept', $userdepartment, '=');
+					}
+					$query->fields('u');
+					$query ->orderBy('appid', 'DESC'); 
+					//$query->range($offset, 10);
+					$q = $query->execute();
+					//print_r($result);
+					break;
+			}
+		}else{
+			if( isset($_GET{'page'} ) )
+			 {
+				$page = $_GET{'page'} + 1;
+				//$offset = $offset + 10 ;
+				$offset = $offset * $page;
+			 }
+			 else
+			 {
+				$page = 0;
+				$offset = 0;
+			 }
+			//$q = db_query_range('SELECT * FROM {application_form}',  $offset,10);
+			//$q = db_query('SELECT * FROM {application_form} WHERE suitable = :suitable',  array(':suitable' => 'suitable'));
+			$query = db_select('application_form', 'u');
+					$query->condition('u.suitable', 'suitable', '=');
+					$query->condition('u.downloaded', 2, '!=');
+					if($userdepartment != '' and $userdepartment != 'Cawston Park'){
+						$query->condition('u.assigned_dept', $userdepartment, '=');
+					}
+					$query->fields('u');
+					$query ->orderBy('appid', 'DESC'); 
+					//$query->range($offset, 10);
+					$q = $query->execute();
+					//print_r($result);
+		}
+
+		
+		
+		if (isset($_POST['suitableoption'])) {
+			$suitableoption_value = $_POST["suitableoption"];
+			$notsuitcomments = $_POST["notsuitcomments"];	
+			$cv = explode("_",$suitableoption_value);
+			$cvsuitable = $cv[0];
+			$cvrecordnumber = $cv[1];
+			$page_content  .= $cvrecordnumber;
+			$page_content  .= $cvsuitable;
+			saves_suitableoption($cvrecordnumber, $cvsuitable, $notsuitcomments);
+		}
+	
+		if (isset($_POST['assignedjob_dept'])) {
+			$assignedjobdept_values = $_POST['assignedjob_dept'];
+			$adv = explode("_",$assignedjobdept_values);
+			$adv_value = $adv[0];
+			$adv_recordnumber = $adv[1];
+			//GET THE ASSIGNED JOB
+			
+			if (isset($_POST['assignedjob_selects'])) {
+				$assignedjob_values = $_POST['assignedjob_selects'];
+				//$page_content  .= $assignedjob_values;
+				//echo  $_POST['assignedjob_selects'];
+				if ($assignedjob_values != 'nochange'){
+					saves_assignedjob_job($adv_value,  $adv_recordnumber, $assignedjob_values);
+				}
+			}
+			saves_assignedjob($adv_value,  $adv_recordnumber);
+			drupal_goto("admin/config/people/application_form", array('fragment' => $node->nid));
+		}
+
+      
+	   $page_content  .= 'Sort By email  (type "all" to view all application)';
+	   
+		$page_content  .= '<form name="form1" method="post" action="" id="application_search">';
+		$page_content  .= '<select name="selectsearch" id="selectsearch">';
+		$page_content  .= ' <option value="all">Show All</option>';
+		$page_content  .= ' <option value="job_title">Job Title</option>';
+		$page_content  .= ' <option value="job_location">Location</option>';
+		$page_content  .= ' <option value="email_add">Email Address</option>';
+		$page_content  .= '</select>';
+		$page_content  .= '<input type="text" name="textfield" id="textfield">';
+		$page_content  .= '<input type="submit" name="button" id="button" value="Submit">';
+		$page_content  .= '';
+		$page_content  .= '</form>';
+		
+		$page_content .= '<h1>Suitable Applicants List</h1>';
+		$page_content .= 'Sorted from the latest applicants';
+		$page_content .= '<table id="applicantstbl">'; 
+		$page_content .= '<tr style="background-color:#f6653c;  color:#fff; font-weight:bold; text-align:center">';  
+		$page_content .= '<td style="border-right:1px solid #ccc; "   >';
+		$page_content .= '<strong>Select</strong>'; 	
+		$page_content  .= '<div id="checkall" onclick="checkall_second()">All</div>';		
+		$page_content .= '</td>'; 
+		
+		if($userdepartment != '' and $userdepartment != 'Cawston Park'){
+			$page_content .= '<td style="border-right:1px solid #ccc; width:150px; background:#ccc" >';
+			$page_content .= '<strong>Assigned Department<br/><span style="font-style:italic; color:#fff">(list of all Department)<span></strong>'; 	 
+			$page_content .= '</td>'; 
+			$page_content .= '<td style="border-right:1px solid #ccc; width:150px; background:#ccc">';
+			$page_content .= '<strong>Assigned Job</strong><br/><span style="font-style:italic; color:#fff">(list of Jobs available)<span>'; 	 
+			$page_content .= '</td>'; 
+		}
+		
+		if($userdepartment == '' or $userdepartment == 'Cawston Park'){
+			$page_content .= '<td style="border-right:1px solid #ccc; "   >';
+			$page_content .= '<strong>Suitable</strong>'; 	 
+			$page_content .= '</td>'; 
+			$page_content .= '<td style="border-right:1px solid #ccc;" >';
+			$page_content .= '<strong>Not Suitable</strong>'; 	 
+			$page_content .= '</td>'; 
+			$page_content .= '<td style="border-right:1px solid #ccc; width:150px;" >';
+			$page_content .= '<strong>Assigned Department<br/><span style="font-style:italic; color:#fff">(list of all Department)<span></strong>'; 	 
+			$page_content .= '</td>'; 
+			$page_content .= '<td style="border-right:1px solid #ccc; width:150px">';
+			$page_content .= '<strong>Assigned Job</strong><br/><span style="font-style:italic; color:#fff">(list of Jobs available)<span>'; 	 
+			$page_content .= '</td>'; 
+			$page_content .= '<td style="border:1px solid #ccc; display:none;">';
+			$page_content .= '<strong>ID</strong>'; 	 
+			$page_content .= '</td>'; 
+			$page_content .= '<td style="border:1px solid #ccc;">';
+			$page_content .= '<strong>Save</strong>'; 	 
+			$page_content .= '</td>'; 	
+		}
+		
+		$page_content .= '<td style="border:1px solid #ccc">';
+		$page_content .= '<strong>Job Title</strong><br/><span style="font-style:italic; color:#fff"> (applied)<span>'; 	 
+		$page_content .= '</td>'; 
+		$page_content .= '<td style="border:1px solid #ccc">';
+		$page_content .= '<strong>Location</strong>'; 	 
+		$page_content .= '</td>'; 
+		$page_content .= '<td style="border:1px solid #ccc">'; 
+		$page_content .= '<strong>Surname</strong><br><span class="vd">Click to view full data</span>'; 	 
+		$page_content .= '</td>'; 
+		$page_content .= '<td style="border:1px solid #ccc">';
+		$page_content .= '<strong>Name</strong>'; 	 
+		$page_content .= '</td>'; 
+		$page_content .= '<td style="border:1px solid #ccc">';
+		$page_content .= '<strong>Email Address</strong>'; 	 
+		$page_content .= '</td>';
+		$page_content .= '<td style="border:1px solid #ccc">';
+		$page_content .= '<strong>Phone Number</strong>'; 	 
+		$page_content .= '</td>';
+		$page_content .= '<td style="border:1px solid #ccc">';
+		$page_content .= '<strong>Mobile Number</strong>'; 	 
+		$page_content .= '</td>';
+		$page_content .= '<td style="border:1px solid #ccc">';
+		$page_content .= '<strong>File Attachment</strong>'; 	 
+		$page_content .= '</td>';
+		
+		$page_content .= '</tr>';  
+		$info = field_info_field('field_location');
+		$options = $info['settings']['allowed_values'];
+		//print_r($options);
+
+		$result = db_query_range('SELECT n.nid
+						  FROM {node} n WHERE n.type = :ntype', 0, 10, array(':ntype' => 'job_opening'));
+		foreach ($result as $record) {
+			$node = node_load($record->nid);
+			$loc = $node->field_location;
+			foreach ($loc as $lkey=> $locrecord) {
+					$ll = $locrecord[0];
+			}
+		}
+	
+	$reccount  = 0;
+	 foreach ($q as $row) {
+		$rowid = $row->appid;
+		//CHECK THE SUITABLE OPTIONS
+		$suitable_chkr = $row->suitable;
+		
+		//	if($suitable_chkr == "suitable"){
+		//		$page_content .= '<tr id="recno'.$rowid.'" style="background:#c8f440">'; 	
+		//	}elseif($suitable_chkr == "not-suitable"){
+		//		$page_content .= '<tr id="recno'.$rowid.'" style="background:#e8e5e5">'; 	
+		//	}else{
+		//		$page_content .= '<tr id="recno'.$rowid.'" style="background:#fff">'; 	
+		//	}
+			
+		$downloaded = $row->downloaded;
+			if($downloaded == 1){
+				$page_content .= '<tr id="recno'.$rowid.'" style="background:#c3cea2">'; 	
+			}else{
+				$page_content .= '<tr id="recno'.$rowid.'" style="background:#fff">'; 	
+			}
+		
+		$page_content  .= '<form id="formdownload_Submit" name="formdownload_Submit" method="post" action="" id="application_download">';
+			$page_content .= '<td style="background-color:#666666; border-bottom:1px solid #fff; border-right:1px solid #fff" align="center">';
+			$page_content .= '<input type="checkbox" name="download[]" id="dchkbox_'.$rowid.'" class="checkbox_second" form="formdownload_Submit"  value="dchkbox_'.$rowid.'" onclick="showdownloadbutt_second(\''.$rowid.'\')"> ';
+			$page_content .= '</td>'; 
+		$page_content  .= '</form >';
+		
+		$page_content .= '</td>'; 
+		
+		if($userdepartment != '' and $userdepartment != 'Cawston Park'){
+			$page_content .= '<td style="border-right:1px solid #ccc; width:150px; background:#f6f4f4" >';
+			$page_content .= $row->assigned_job; 	 
+			$page_content .= '</td>'; 
+			$page_content .= '<td style="border-right:1px solid #ccc; width:150px; background:#f6f4f4">';
+			$page_content .= $row->assigned_dept; 	 
+			$page_content .= '</td>'; 
+		}
+
+		if($userdepartment == '' or $userdepartment == 'Cawston Park'){
+			$page_content  .= '<form name="form2" method="post" action="" id="application_search">';
+					
+					$page_content .= '<td style="background-color:#666666; border-bottom:1px solid #fff; border-right:1px solid #fff" align="center">';							
+					if($suitable_chkr == 'suitable'){
+						$page_content .= '<input type="radio" name="suitableoption" value="suitable_'.$rowid.'" id="suitable_'.$rowid.'"  checked  /> ';
+					}else{
+						$page_content .= '<input type="radio" name="suitableoption" value="suitable_'.$rowid.'" id="suitable_'.$rowid.'" onclick="suitable(\''.$rowid.'\')"   /> ';
+					}
+					$page_content .= '</td>'; 
+					
+					
+					$page_content .= '<td style="background-color:#666666; border-bottom:1px solid #fff; border-right:1px solid #fff" align="center">';
+					if($suitable_chkr == 'not-suitable'){
+						$page_content .= '<input type="radio" name="suitableoption" value="not-suitable_'.$rowid.'"  id="notsuitable_'.$rowid.'"  checked /> ';
+					}else{
+						$page_content .= '<input type="radio" name="suitableoption" value="not-suitable_'.$rowid.'"  id="notsuitable_'.$rowid.'" onclick="notsuitable(\''.$rowid.'\')" /> ';
+					}
+					$page_content .= '<div id="notsuitcomment_'.$rowid.'" style="display:none; position:absolute; " class="notsuit"><textarea style="border:2px solid #ccc" id="comments_'.$rowid.'" name="notsuitcomments" cols="60" rows="3" class="form-textarea required"></textarea></div>';
+					$page_content .= '</td>'; 
+					
+					$page_content .= '<td style="background-color:#666666; border-bottom:1px solid #fff; border-right:1px solid #fff" align="center">';
+					$page_content .= '<select  style="height:40px; background:#666666; color:#fff" name="assignedjob_dept" id="assignedjob_dept['.$rowid.']"  onclick="reassigned(\''.$rowid.'\')">';
+					
+					//CHECK IF THE ASSIGNED DEPT HAS CHANGED
+					$job_location =  $row->job_location;
+					$assigned_dept =  $row->assigned_dept;
+					if($job_location != $assigned_dept){
+						$selectoption_d = $assigned_dept;
+					}else{
+						$selectoption_d = 'Select Department';
+					}
+					
+					$page_content .= '		<option value="nochange" style="background:#e0e0d8; font-weight:bold">'.$selectoption_d.'</option>';
+												foreach ($options as $key => $row1) {
+					$page_content .= '	<option value="'.$row1.'_'.$rowid.'" style="background:#f2bd7f;" >'.$row1.'</option>';
+												}
+					$page_content .= '	</select>'; 	 
+					$page_content .= '</td>'; 
+					$page_content .= '<td style="background-color:#666666; border-bottom:1px solid #fff; border-right:1px solid #fff" align="center">';
+					
+					//CHECK IF THE ASSIGNED JOB HAS CHANGED
+					$job_applied =  $row->job_title;
+					$job_assigned =  $row->assigned_job;
+					if($job_applied != $job_assigned){
+						$selectoption = $job_assigned;
+					}else{
+						$selectoption = 'Select Job Title';
+					}
+					
+					$page_content .= '<select id="assignedjob_select'.$rowid.'" name="assignedjob_selects"   style="height:40px; background:#666666; color:#fff"  disabled="true" onchange="assignedjobdisabled(\''.$rowid.'\')">';
+					$page_content .= '		<option value="nochange">'.$selectoption.'</option>';
+													$result = db_query_range('SELECT n.nid
+													FROM {node} n WHERE n.type = :ntype', 0, 10, array(':ntype' => 'job_opening'));
+													foreach ($result as $record) {
+														$node = node_load($record->nid);
+															$title = $node->title;
+					$page_content .= '			<option value="'.$title.'" style="background:#f2bd7f;">'.$title.'</option>';
+													}
+					$page_content .= '</select>';  
+					$page_content .= '</td>';
+					$page_content .= '<td class="chstd">';
+					$page_content .= ' <input type="submit" value="Submit" class="chs_'.$rowid.'" disabled = "true">';  
+					$page_content .= '</td>'; 
+			$page_content  .= '</form >';
+		}
+		
+		$page_content .= '<td style="display:none;">';
+		$page_content .= $row->appid; 	 
+		$page_content .= '</td>'; 
+		
+		//CHECK IF THE ASSIGNED JOB HAS CHANGED
+		$job_applied =  $row->job_title;
+		$job_assigned =  $row->assigned_job;
+		if($job_applied != $job_assigned){
+			$bgcolor = '#96c505';
+		}else{
+			$bgcolor = '#c8f440';
+		}
+		$page_content .= '<td style="background:'.$bgcolor.'  ">';
+		$page_content .= $row->job_title; 	 
+		$page_content .= '</td>'; 
+		
+		$job_location =  $row->job_location;
+		$assigned_dept =  $row->assigned_dept;
+		if($job_location != $assigned_dept){
+			$bgcolor1 = '#96c505';
+		}else{
+			$bgcolor1 = '#c8f440';
+		}
+		$page_content .= '<td style="background:'.$bgcolor1.'  ">';
+		$page_content .= $row->job_location; 	 
+		$page_content .= '</td>';
+		$page_content .= '<td style="border:1px solid #e0e0d8" class="al">';
+		$page_content .= '<a href="application_form/edit/'. $row->appid . '">'.$row->surname.'</a>'; 	
+		$page_content .= '</td>'; 
+		$page_content .= '<td >'; 	
+		$page_content .=  $row->forname;  
+		$page_content .= '</td>'; 		
+		$page_content .= '<td >'; 	
+		$page_content .=  $row->email_add;  
+		$page_content .= '</td>'; 
+		$page_content .= '<td>'; 	
+		$page_content .=  $row->phone_no;  
+		$page_content .= '</td>'; 
+		$page_content .= '<td >'; 	
+		$page_content .=  $row->mobile_no;  
+		$page_content .= '</td>'; 
+		$page_content .= '<td >';  //***GET THE FILE ATTACHMENT LINK WITH THE USERS TABLE
+			
+				
+			$applicantemail = $row->email_add; //GET THE EMAIL ADDRESS
+			
+			$qumail = db_query('SELECT * FROM {users} WHERE mail = :mail', array(':mail' => $applicantemail ));
+			foreach($qumail as $skey1){
+				$skey = $skey1->uid;
+			}
+			
+			$query = db_select('file_usage', 'fu');
+						$query->condition('fu.module', 'file', '=');
+						$query->condition('fu.id', $skey, '=');
+						$query->fields('fu');
+						$qwf = $query->execute();
+			
+			//print_r($qw);
+			
+			foreach ($qwf as $row1f){
+				//print_r($row1f);
+				$skeyfid = $row1f->fid;
+			}
+			
+			
+			$qumailfile = db_query('SELECT * FROM {file_managed} WHERE fid = :fid', array(':fid' => $skeyfid ));
+			foreach($qumailfile as $skeyfile){
+				$skeyfilename = $skeyfile->filename;
+			}
+
+			
+			//$page_content .= $applicantemail .'<br/>';
+			//$page_content .= $skey  .'<br/>';
+			//$page_content .= $skeyfid  .'<br/>';
+			//$page_content .= '<a href=" '.base_path().'sites/default/resume/'.$skeyfilename.' " > '.$skeyfilename  .'</a><br/>';
+			$page_content .= '<a href=" '.base_path().'sites/default/resume/'.$skeyfilename.' " ><img src =" '.base_path().'sites/all/themes/jobsite/images/fd_03.png"/></a><br/>';
+		$page_content .= '</td>';  //***END GET THE FILE ATTACHMENT LINK WITH THE USERS TABLE
+		$page_content .= '</tr>';
+		$reccount = $reccount + 1;
+    }
+	
+	
+		 $page_content .= '</table>'; 	
+		 /* $page_content .='<div id="hradminnote">You must save the changes before proceeding to the next or previous page</div>';
+		  if( $page > 0)
+         {
+            $last = $page - 2;
+            $page_content .= "<span id='pagingbutton' ><a href=' $_PHP_SELF?page=$last' disabled='true'>Last 10 Records</a> </span>";
+			if( $page > 0 and $reccount != 0 ){
+				$page_content .= "<span id='pagingbutton1'><a href=' $_PHP_SELF?page=$page' disabled='true'>Next 10 Records</a></span>";
+			}
+         }
+	 if( $page == 0 )
+         {
+			 $page = $page + 0;
+			 $offset =$offset + 1 ;
+             $page_content .= "<span id='pagingbutton'><a href=' $_PHP_SELF?page=$page' disabled='true'>Next 10 Records</a></span>";
+			 $page_content .= "<span id='pagingbutton1' style='display:none'><a href=' $_PHP_SELF?page=$page' disabled='true'>Next 10 Records</a></span>";
+		}*/
+	   
+		
+        $page_content .= '</div>';
+		$page_content .= '</li>';
+		
+		//THIRD TAB***********************************************************************************************************************************************************************************//
+		$page_content .= '<li>';
+        $page_content .= ' <input type="radio" name="tabs" id="tab3" class="tcradio" />';
+        $page_content .= '<label for="tab3">Not Suitable</label>';
+        $page_content .= '<div id="tab-content2" class="tab-content">';
+       
+        if (isset($_POST['selectsearch'])) {
+			$searchfield = $_POST['selectsearch'];
+			$searchcriteria = $_POST['textfield'];
+			
+			switch ($searchfield) {
+				case job_title:
+					if($searchcriteria != 'all'){
+						$page_content .= $searchcriteria;
+						$q = db_query('SELECT * FROM {application_form} WHERE job_title LIKE :job_title', array(':job_title' => db_like($searchcriteria) . '%'));
+					}else{
+						$q = db_query('SELECT * FROM {application_form}');
+					}
+					break;
+				case job_location:
+					if($searchcriteria != 'all'){
+						$page_content .= $searchcriteria;
+						$q = db_query('SELECT * FROM {application_form} WHERE job_location LIKE :job_location', array(':job_location' => db_like($searchcriteria) . '%'));
+					}else{
+						$q = db_query('SELECT * FROM {application_form}');
+					}
+					break;
+				case email_add:
+					if($searchcriteria != 'all'){
+						$page_content .= $searchcriteria;
+						$q = db_query('SELECT * FROM {application_form} WHERE email_add LIKE :email_add', array(':email_add' => db_like($searchcriteria) . '%'));
+					}else{
+						if( isset($_GET{'page'} ) )
+						 {
+							$page = $_GET{'page'} + 1;
+							//$offset = $offset + 10 ;
+							$offset = $offset * $page;
+						 }
+						 else
+						 {
+							$page = 0;
+							$offset = 0;
+						 }
+							//$q = db_query('SELECT * FROM {application_form} WHERE appid = :appid', array(':appid' => $appd));
+						//$q = db_query('SELECT * FROM {application_form} WHERE suitable = :suitable',  array(':suitable' => 'not-suitable'));
+						$query = db_select('application_form', 'u');
+						$query->condition('u.suitable', 'not-suitable', '=');
+						$query->condition('u.downloaded', 2, '!=');
+						if($userdepartment != '' and $userdepartment != 'Cawston Park'){
+							$query->condition('u.assigned_dept', $userdepartment, '=');
+						}
+						$query->fields('u');
+						$query ->orderBy('appid', 'DESC'); 
+						//$query->range($offset, 10);
+						$q = $query->execute();
+					};
+					break;
+				case all:
+					if( isset($_GET{'page'} ) )
+					 {
+						$page = $_GET{'page'} + 1;
+						//$offset = $offset + 10 ;
+						$offset = $offset * $page;
+					 }
+					 else
+					 {
+						$page = 0;
+						$offset = 0;
+					 }
+					//$q = db_query_range('SELECT * FROM {application_form}',  $offset,10);
+					//$q = db_query('SELECT * FROM {application_form} WHERE suitable = :suitable',  array(':suitable' => 'not-suitable'));
+					$query = db_select('application_form', 'u');
+					$query->condition('u.suitable', 'not-suitable', '=');
+					$query->condition('u.downloaded', 2, '!=');
+					if($userdepartment != '' and $userdepartment != 'Cawston Park'){
+						$query->condition('u.assigned_dept', $userdepartment, '=');
+					}
+					$query->fields('u');
+					$query ->orderBy('appid', 'DESC'); 
+					//$query->range($offset, 10);
+					$q = $query->execute();
+					break;
+			}
+		}else{
+			if( isset($_GET{'page'} ) )
+			 {
+				$page = $_GET{'page'} + 1;
+				//$offset = $offset + 10 ;
+				$offset = $offset * $page;
+			 }
+			 else
+			 {
+				$page = 0;
+				$offset = 0;
+			 }
+			
+			$query = db_select('application_form', 'u');
+					$query->condition('u.suitable', 'not-suitable', '=');
+					$query->condition('u.downloaded', 2, '!=');
+					if($userdepartment != '' or $userdepartment == 'Cawston Park'){
+						$query->condition('u.assigned_dept', $userdepartment, '=');
+					}
+					$query->fields('u');
+					$query ->orderBy('appid', 'DESC'); 
+					//$query->range($offset, 10);
+					$q = $query->execute();
+		}
+
+		if (isset($_POST['suitableoption'])) {
+			$suitableoption_value = $_POST["suitableoption"];
+			$notsuitcomments = $_POST["notsuitcomments"];	
+			$cv = explode("_",$suitableoption_value);
+			$cvsuitable = $cv[0];
+			$cvrecordnumber = $cv[1];
+			$page_content  .= $cvrecordnumber;
+			$page_content  .= $cvsuitable;
+			saves_suitableoption($cvrecordnumber, $cvsuitable, $notsuitcomments);
+		}
+	
+		if (isset($_POST['assignedjob_dept'])) {
+			$assignedjobdept_values = $_POST['assignedjob_dept'];
+			$adv = explode("_",$assignedjobdept_values);
+			$adv_value = $adv[0];
+			$adv_recordnumber = $adv[1];
+			//GET THE ASSIGNED JOB
+			
+			if (isset($_POST['assignedjob_selects'])) {
+				$assignedjob_values = $_POST['assignedjob_selects'];
+				//$page_content  .= $assignedjob_values;
+				//echo  $_POST['assignedjob_selects'];
+				if ($assignedjob_values != 'nochange'){
+					saves_assignedjob_job($adv_value,  $adv_recordnumber, $assignedjob_values);
+				}
+			}
+			saves_assignedjob($adv_value,  $adv_recordnumber);
+			drupal_goto("admin/config/people/application_form", array('fragment' => $node->nid));
+		}
+
+		
+		
+      
+	   $page_content  .= 'Sort By email  (type "all" to view all application)';
+		
+		$page_content  .= '<form name="form1" method="post" action="" id="application_search">';
+		$page_content  .= '<select name="selectsearch" id="selectsearch">';
+		$page_content  .= ' <option value="all">Show All</option>';
+		$page_content  .= ' <option value="job_title">Job Title</option>';
+		$page_content  .= ' <option value="job_location">Location</option>';
+		$page_content  .= ' <option value="email_add">Email Address</option>';
+		$page_content  .= '</select>';
+		$page_content  .= '<input type="text" name="textfield" id="textfield">';
+		$page_content  .= '<input type="submit" name="button" id="button" value="Submit">';
+		$page_content  .= '';
+		$page_content  .= '</form>';
+		
+  	    $page_content .= '<h1>Not Suitable Applicants List</h1>';
+		$page_content .= 'Sorted from the latest applicants';
+		$page_content .= '<table id="applicantstbl">'; 
+		$page_content .= '<tr style="background-color:#f6653c;  color:#fff; font-weight:bold; text-align:center">';  
+		$page_content .= '<td style="border-right:1px solid #ccc; "   >';
+		$page_content .= '<strong>Select</strong>'; 	
+		$page_content  .= '<div id="checkall" onclick="checkall_third()">All</div>';
+		$page_content .= '</td>'; 
+		
+		if($userdepartment != '' and $userdepartment != 'Cawston Park'){
+			$page_content .= '<td style="border-right:1px solid #ccc; width:150px; background:#ccc" >';
+			$page_content .= '<strong>Assigned Department<br/><span style="font-style:italic; color:#fff">(list of all Department)<span></strong>'; 	 
+			$page_content .= '</td>'; 
+			$page_content .= '<td style="border-right:1px solid #ccc; width:150px; background:#ccc">';
+			$page_content .= '<strong>Assigned Job</strong><br/><span style="font-style:italic; color:#fff">(list of Jobs available)<span>'; 	 
+			$page_content .= '</td>'; 
+		}
+		
+		if($userdepartment == '' or $userdepartment == 'Cawston Park'){
+			$page_content .= '<td style="border-right:1px solid #ccc; "   >';
+			$page_content .= '<strong>Suitable</strong>'; 	 
+			$page_content .= '</td>'; 
+			$page_content .= '<td style="border-right:1px solid #ccc;" >';
+			$page_content .= '<strong>Not Suitable</strong>'; 	 
+			$page_content .= '</td>'; 
+			$page_content .= '<td style="border-right:1px solid #ccc; width:150px;" >';
+			$page_content .= '<strong>Assigned Department<br/><span style="font-style:italic; color:#fff">(list of all Department)<span></strong>'; 	 
+			$page_content .= '</td>'; 
+			$page_content .= '<td style="border-right:1px solid #ccc; width:150px">';
+			$page_content .= '<strong>Assigned Job</strong><br/><span style="font-style:italic; color:#fff">(list of Jobs available)<span>'; 	 
+			$page_content .= '</td>'; 
+			$page_content .= '<td style="border:1px solid #ccc; display:none;">';
+			$page_content .= '<strong>ID</strong>'; 	 
+			$page_content .= '</td>'; 
+			$page_content .= '<td style="border:1px solid #ccc;">';
+			$page_content .= '<strong>Save</strong>'; 	 
+			$page_content .= '</td>'; 
+		}
+		
+		$page_content .= '<td style="border:1px solid #ccc">';
+		$page_content .= '<strong>Job Title<br/><span style="font-style:italic; color:#fff">(applied)<span></strong>'; 		 
+		$page_content .= '</td>'; 
+		$page_content .= '<td style="border:1px solid #ccc">';
+		$page_content .= '<strong>Location</strong>'; 	 
+		$page_content .= '</td>'; 
+		$page_content .= '<td style="border:1px solid #ccc">'; 
+		$page_content .= '<strong>Surname</strong><br><span class="vd">Click to view full data</span>'; 	 
+		$page_content .= '</td>'; 
+		$page_content .= '<td style="border:1px solid #ccc">';
+		$page_content .= '<strong>Name</strong>'; 	 
+		$page_content .= '</td>'; 
+		$page_content .= '<td style="border:1px solid #ccc">';
+		$page_content .= '<strong>Email Address</strong>'; 	 
+		$page_content .= '</td>';
+		$page_content .= '<td style="border:1px solid #ccc">';
+		$page_content .= '<strong>Phone Number</strong>'; 	 
+		$page_content .= '</td>';
+		$page_content .= '<td style="border:1px solid #ccc">';
+		$page_content .= '<strong>Mobile Number</strong>'; 	 
+		$page_content .= '</td>';
+		$page_content .= '<td style="border:1px solid #ccc">';
+		$page_content .= '<strong>File Attachment</strong>'; 	 
+		$page_content .= '</td>';
+		
+		$page_content .= '</tr>';  
+		$info = field_info_field('field_location');
+		$options = $info['settings']['allowed_values'];
+		//print_r($options);
+
+		$result = db_query_range('SELECT n.nid
+						  FROM {node} n WHERE n.type = :ntype', 0, 10, array(':ntype' => 'job_opening'));
+		foreach ($result as $record) {
+			$node = node_load($record->nid);
+			$loc = $node->field_location;
+			foreach ($loc as $lkey=> $locrecord) {
+					$ll = $locrecord[0];
+			}
+		}
+	
+	$reccount  = 0;
+	 foreach ($q as $row) {
+		$rowid = $row->appid;
+		//CHECK THE SUITABLE OPTIONS
+		$suitable_chkr = $row->suitable;
+		
+			//if($suitable_chkr == "suitable"){
+			//	$page_content .= '<tr id="recno'.$rowid.'" style="background:#c8f440">'; 	
+			//}elseif($suitable_chkr == "not-suitable"){
+			//	$page_content .= '<tr id="recno'.$rowid.'" style="background:#e8e5e5">'; 	
+			//}else{
+			//	$page_content .= '<tr id="recno'.$rowid.'" style="background:#fff">'; 	
+			//}
+		
+		$downloaded = $row->downloaded;
+			if($downloaded == 1){
+				$page_content .= '<tr id="recno'.$rowid.'" style="background:#c3cea2">'; 	
+			}else{
+				$page_content .= '<tr id="recno'.$rowid.'" style="background:#fff">'; 	
+			}
+			
+			
+		$page_content  .= '<form id="formdownload_Submit" name="formdownload_Submit" method="post" action="" id="application_download">';
+			$page_content .= '<td style="background-color:#666666; border-bottom:1px solid #fff; border-right:1px solid #fff" align="center">';
+			$page_content .= '<input type="checkbox" name="download[]" id="dchkbox_'.$rowid.'" class="checkbox_third" form="formdownload_Submit"  value="dchkbox_'.$rowid.'" onclick="showdownloadbutt_third(\''.$rowid.'\')"> ';
+			$page_content .= '</td>'; 
+		$page_content  .= '</form >';
+		
+		
+		
+		if($userdepartment != '' and $userdepartment != 'Cawston Park'){
+			$page_content .= '<td style="border-right:1px solid #ccc; width:150px; background:#f6f4f4" >';
+			$page_content .= $row->assigned_job; 	 
+			$page_content .= '</td>'; 
+			$page_content .= '<td style="border-right:1px solid #ccc; width:150px; background:#f6f4f4">';
+			$page_content .= $row->assigned_dept; 	 
+			$page_content .= '</td>'; 
+		}
+
+		if($userdepartment == '' or $userdepartment == 'Cawston Park'){
+			$page_content  .= '<form name="form2" method="post" action="" id="application_search">';
+					$page_content .= '<td style="background-color:#666666; border-bottom:1px solid #fff; border-right:1px solid #fff" align="center">';							
+					if($suitable_chkr == 'suitable'){
+						$page_content .= '<input type="radio" name="suitableoption" value="suitable_'.$rowid.'" id="suitable_'.$rowid.'"  checked  /> ';
+					}else{
+						$page_content .= '<input type="radio" name="suitableoption" value="suitable_'.$rowid.'" id="suitable_'.$rowid.'" onclick="suitable(\''.$rowid.'\')"   /> ';
+					}
+					$page_content .= '</td>'; 
+					$page_content .= '<td style="background-color:#666666; border-bottom:1px solid #fff; border-right:1px solid #fff" align="center"  onmouseover="notsuitableh(\''.$rowid.'\')" onmouseout="notsuitableo(\''.$rowid.'\')">';
+					if($suitable_chkr == 'not-suitable'){
+						$page_content .= '<input type="radio" name="suitableoption" value="not-suitable_'.$rowid.'"  id="notsuitable_'.$rowid.'"  checked /> ';
+					}else{
+						$page_content .= '<input type="radio" name="suitableoption" value="not-suitable_'.$rowid.'"  id="notsuitable_'.$rowid.'" onclick="notsuitable(\''.$rowid.'\')" /> ';
+					}
+					$page_content .= '<div id="notsuitcomment_'.$rowid.'" style="display:none; position:absolute; " class="notsuit"><textarea style="border:2px solid #ccc" id="comments_'.$rowid.'" name="notsuitcomments" cols="60" rows="3" class="form-textarea required">'.$row->notsuitable_comment.'</textarea></div>';
+					$page_content .= '</td>'; 
+					$page_content .= '<td style="background-color:#666666; border-bottom:1px solid #fff; border-right:1px solid #fff" align="center">';
+					$page_content .= '<select  style="height:40px; background:#666666; color:#fff" name="assignedjob_dept" id="assignedjob_dept['.$rowid.']"  onclick="reassigned(\''.$rowid.'\')">';
+					$page_content .= '		<option value="nochange" style="background:#e0e0d8; font-weight:bold">Select Department</option>';
+												foreach ($options as $key => $row1) {
+					$page_content .= '	<option value="'.$row1.'_'.$rowid.'" style="background:#f2bd7f;" >'.$row1.'</option>';
+												}
+					$page_content .= '	</select>'; 	 
+					$page_content .= '</td>'; 
+					$page_content .= '<td style="background-color:#666666; border-bottom:1px solid #fff; border-right:1px solid #fff" align="center">';
+					$page_content .= '<select id="assignedjob_select'.$rowid.'" name="assignedjob_selects"   style="height:40px; background:#666666; color:#fff"  disabled="true" onchange="assignedjobdisabled(\''.$rowid.'\')">';
+					$page_content .= '		<option value="nochange">Select Job Title</option>';
+													$result = db_query_range('SELECT n.nid
+													FROM {node} n WHERE n.type = :ntype', 0, 10, array(':ntype' => 'job_opening'));
+													foreach ($result as $record) {
+														$node = node_load($record->nid);
+															$title = $node->title;
+					$page_content .= '			<option value="'.$title.'" style="background:#f2bd7f;">'.$title.'</option>';
+													}
+					$page_content .= '</select>';  
+					$page_content .= '</td>';
+					$page_content .= '<td class="chstd">';
+					//$page_content .= ' <input type="submit" value="Submit" class="chs">';  
+					$page_content .= ' <input type="submit" value="Submit" class="chs_'.$rowid.'" disabled = "true">';  
+					$page_content .= '</td>'; 
+			$page_content  .= '</form >';
+		}
+		
+		$page_content .= '<td style="display:none;">';
+		$page_content .= $row->appid; 	 
+		$page_content .= '</td>'; 
+		$page_content .= '<td style=" ">';
+		$page_content .= $row->job_title; 	 
+		$page_content .= '</td>'; 
+		$page_content .= '<td style="">';
+		$page_content .= $row->job_location; 	 
+		$page_content .= '</td>';
+		$page_content .= '<td style="border:1px solid #e0e0d8" class="al">';
+		$page_content .= '<a href="application_form/edit/'. $row->appid . '">'.$row->surname.'</a>'; 	
+		$page_content .= '</td>'; 
+		$page_content .= '<td >'; 	
+		$page_content .=  $row->forname;  
+		$page_content .= '</td>'; 		
+		$page_content .= '<td >'; 	
+		$page_content .=  $row->email_add;  
+		$page_content .= '</td>'; 
+		$page_content .= '<td>'; 	
+		$page_content .=  $row->phone_no;  
+		$page_content .= '</td>'; 
+		$page_content .= '<td >'; 	
+		$page_content .=  $row->mobile_no;  
+		$page_content .= '</td>'; 
+		$page_content .= '<td >';  //***GET THE FILE ATTACHMENT LINK WITH THE USERS TABLE
+			
+			$applicantemail = $row->email_add; //GET THE EMAIL ADDRESS
+			
+			$qumail = db_query('SELECT * FROM {users} WHERE mail = :mail', array(':mail' => $applicantemail ));
+			foreach($qumail as $skey1){
+				$skey = $skey1->uid;
+			}
+			
+			$query = db_select('file_usage', 'fu');
+						$query->condition('fu.module', 'file', '=');
+						$query->condition('fu.id', $skey, '=');
+						$query->fields('fu');
+						$qwf = $query->execute();
+			
+			//print_r($qw);
+			
+			foreach ($qwf as $row1f){
+				//print_r($row1f);
+				$skeyfid = $row1f->fid;
+			}
+			
+			
+			$qumailfile = db_query('SELECT * FROM {file_managed} WHERE fid = :fid', array(':fid' => $skeyfid ));
+			foreach($qumailfile as $skeyfile){
+				$skeyfilename = $skeyfile->filename;
+			}
+			
+		//$page_content .= '<a href=" '.base_path().'sites/default/resume/'.$skeyfilename.' " > '.$skeyfilename  .'</a><br/>';
+		$page_content .= '<a href=" '.base_path().'sites/default/resume/'.$skeyfilename.' " ><img src =" '.base_path().'sites/all/themes/jobsite/images/fd_03.png"/></a><br/>';
+		$page_content .= '</td>';  //***END GET THE FILE ATTACHMENT LINK WITH THE USERS TABLE
+		$page_content .= '</tr>';
+		$reccount = $reccount + 1;
+    }
+	
+	
+		 $page_content .= '</table>'; 	
+		  $page_content .='<div id="hradminnote">You must save the changes before proceeding to the next or previous page</div>';
+		 /* if( $page > 0)
+         {
+            $last = $page - 2;
+            $page_content .= "<span id='pagingbutton' ><a href=' $_PHP_SELF?page=$last' disabled='true'>Last 10 Records</a> </span>";
+			if( $page > 0 and $reccount != 0 ){
+				$page_content .= "<span id='pagingbutton1'><a href=' $_PHP_SELF?page=$page' disabled='true'>Next 10 Records</a></span>";
+			}
+         }
+	 if( $page == 0 )
+         {
+			 $page = $page + 0;
+			 $offset =$offset + 1 ;
+             $page_content .= "<span id='pagingbutton'><a href=' $_PHP_SELF?page=$page' disabled='true'>Next 10 Records</a></span>";
+			 $page_content .= "<span id='pagingbutton1' style='display:none'><a href=' $_PHP_SELF?page=$page' disabled='true'>Next 10 Records</a></span>";
+		}*/
+
+      
+	   
+	   $page_content .= '</div>';
+	   $page_content .= '</li>';
+	   
+	   //FOURTH TAB******************************************************************************************************************************************************************************************************************//
+	  if($userdepartment == '' or $userdepartment == 'Cawston Park'){
+		
+				$page_content .= '<li>';
+				$page_content .= ' <input type="radio" name="tabs" id="tab4" class="tcradio" />';
+				$page_content .= '<label for="tab4" >Archive</label>';
+				$page_content .= '<div id="tab-content2" class="tab-content">';
+			   
+			   if (isset($_POST['selectsearch'])) {
+					$searchfield = $_POST['selectsearch'];
+					$searchcriteria = $_POST['textfield'];
+					
+					switch ($searchfield) {
+						case job_title:
+							if($searchcriteria != 'all'){
+								$page_content .= $searchcriteria;
+								$q = db_query('SELECT * FROM {application_form} WHERE job_title LIKE :job_title', array(':job_title' => db_like($searchcriteria) . '%'));
+							}else{
+								$q = db_query('SELECT * FROM {application_form}');
+							}
+							break;
+						case job_location:
+							if($searchcriteria != 'all'){
+								$page_content .= $searchcriteria;
+								$q = db_query('SELECT * FROM {application_form} WHERE job_location LIKE :job_location', array(':job_location' => db_like($searchcriteria) . '%'));
+							}else{
+								$q = db_query('SELECT * FROM {application_form}');
+							}
+							break;
+						case email_add:
+							if($searchcriteria != 'all'){
+								$page_content .= $searchcriteria;
+								$q = db_query('SELECT * FROM {application_form} WHERE email_add LIKE :email_add', array(':email_add' => db_like($searchcriteria) . '%'));
+							}else{
+								if( isset($_GET{'page'} ) )
+								 {
+									$page = $_GET{'page'} + 1;
+									//$offset = $offset + 10 ;
+									$offset = $offset * $page;
+								 }
+								 else
+								 {
+									$page = 0;
+									$offset = 0;
+								 }
+								
+								$query = db_select('application_form', 'u');
+								$query->condition('u.downloaded', 2, '=');
+								$query->fields('u');
+								//$query->range($offset, 10);
+								$query ->orderBy('appid', 'DESC'); 
+								$q = $query->execute();
+								//print_r($result);
+							};
+							break;
+						case all:
+							if( isset($_GET{'page'} ) )
+							 {
+								$page = $_GET{'page'} + 1;
+								//$offset = $offset + 10 ;
+								$offset = $offset * $page;
+							 }
+							 else
+							 {
+								$page = 0;
+								$offset = 0;
+							 }
+							
+							$query = db_select('application_form', 'u');
+							$query->condition('u.downloaded', 2, '=');
+							$query->fields('u');
+							$query ->orderBy('appid', 'DESC'); 
+							//$query->range($offset, 10);
+							$q = $query->execute();
+							//print_r($result);
+							break;
+					}
+				}else{
+					if( isset($_GET{'page'} ) )
+					 {
+						$page = $_GET{'page'} + 1;
+						//$offset = $offset + 10 ;
+						$offset = $offset * $page;
+					 }
+					 else
+					 {
+						$page = 0;
+						$offset = 0;
+					 }
+					
+					$query = db_select('application_form', 'u');
+							$query->condition('u.downloaded', 2, '=');
+							$query->fields('u');
+							$query ->orderBy('appid', 'DESC'); 
+							//$query->range($offset, 10);
+							$q = $query->execute();
+							//print_r($result);
+				}
+
+				
+				
+				if (isset($_POST['suitableoption'])) {
+					$suitableoption_value = $_POST["suitableoption"];
+					$notsuitcomments = $_POST["notsuitcomments"];	
+					$cv = explode("_",$suitableoption_value);
+					$cvsuitable = $cv[0];
+					$cvrecordnumber = $cv[1];
+					$page_content  .= $cvrecordnumber;
+					$page_content  .= $cvsuitable;
+					saves_suitableoption($cvrecordnumber, $cvsuitable, $notsuitcomments);
+				}
+			
+				if (isset($_POST['assignedjob_dept'])) {
+					$assignedjobdept_values = $_POST['assignedjob_dept'];
+					$adv = explode("_",$assignedjobdept_values);
+					$adv_value = $adv[0];
+					$adv_recordnumber = $adv[1];
+					//GET THE ASSIGNED JOB
+					
+					if (isset($_POST['assignedjob_selects'])) {
+						$assignedjob_values = $_POST['assignedjob_selects'];
+						//$page_content  .= $assignedjob_values;
+						//echo  $_POST['assignedjob_selects'];
+						if ($assignedjob_values != 'nochange'){
+							saves_assignedjob_job($adv_value,  $adv_recordnumber, $assignedjob_values);
+						}
+					}
+					saves_assignedjob($adv_value,  $adv_recordnumber);
+					drupal_goto("admin/config/people/application_form", array('fragment' => $node->nid));
+				}
+
+			  
+			   $page_content  .= 'Sort By email  (type "all" to view all application)';
+			   
+				$page_content  .= '<form name="form1" method="post" action="" id="application_search">';
+				$page_content  .= '<select name="selectsearch" id="selectsearch">';
+				$page_content  .= ' <option value="all">Show All</option>';
+				$page_content  .= ' <option value="job_title">Job Title</option>';
+				$page_content  .= ' <option value="job_location">Location</option>';
+				$page_content  .= ' <option value="email_add">Email Address</option>';
+				$page_content  .= '</select>';
+				$page_content  .= '<input type="text" name="textfield" id="textfield">';
+				$page_content  .= '<input type="submit" name="button" id="button" value="Submit">';
+				$page_content  .= '';
+				$page_content  .= '</form>';
+				
+				$page_content .= '<h1>Archived</h1>';
+				$page_content .= 'Sorted from the latest applicants';
+				$page_content .= '<table id="applicantstbl">'; 
+				$page_content .= '<tr style="background-color:#f6653c;  color:#fff; font-weight:bold; text-align:center">';  
+				$page_content .= '<td style="border-right:1px solid #ccc; "   >';
+				$page_content .= '<strong>Select</strong>'; 	
+				$page_content  .= '<div id="checkall" onclick="checkall_second()">All</div>';		
+				$page_content .= '</td>'; 
+				
+
+				
+
+					$page_content .= '<td style="border-right:1px solid #ccc; "   >';
+					$page_content .= '<strong>Suitable</strong>'; 	 
+					$page_content .= '</td>';  
+					$page_content .= '<td style="border-right:1px solid #ccc; width:150px;" >';
+					$page_content .= '<strong>Assigned Department<br/><span style="font-style:italic; color:#fff">(list of all Department)<span></strong>'; 	 
+					$page_content .= '</td>'; 
+					$page_content .= '<td style="border-right:1px solid #ccc; width:150px">';
+					$page_content .= '<strong>Assigned Job</strong><br/><span style="font-style:italic; color:#fff">(list of Jobs available)<span>'; 	 
+					$page_content .= '</td>'; 
+					$page_content .= '<td style="border:1px solid #ccc; display:none;">';
+					$page_content .= '<strong>ID</strong>'; 	 
+					$page_content .= '</td>'; 	
+
+				
+				$page_content .= '<td style="border:1px solid #ccc">';
+				$page_content .= '<strong>Job Title</strong><br/><span style="font-style:italic; color:#fff"> (applied)<span>'; 	 
+				$page_content .= '</td>'; 
+				$page_content .= '<td style="border:1px solid #ccc">';
+				$page_content .= '<strong>Location</strong>'; 	 
+				$page_content .= '</td>'; 
+				$page_content .= '<td style="border:1px solid #ccc">'; 
+				$page_content .= '<strong>Surname</strong><br><span class="vd">Click to view full data</span>'; 	 
+				$page_content .= '</td>'; 
+				$page_content .= '<td style="border:1px solid #ccc">';
+				$page_content .= '<strong>Name</strong>'; 	 
+				$page_content .= '</td>'; 
+				$page_content .= '<td style="border:1px solid #ccc">';
+				$page_content .= '<strong>Email Address</strong>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #ccc">';
+				$page_content .= '<strong>Phone Number</strong>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #ccc">';
+				$page_content .= '<strong>Mobile Number</strong>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #ccc">';
+				$page_content .= '<strong>File Attachment</strong>'; 	 
+				$page_content .= '</td>';
+				
+				$page_content .= '</tr>';  
+				$info = field_info_field('field_location');
+				$options = $info['settings']['allowed_values'];
+				//print_r($options);
+
+				$result = db_query_range('SELECT n.nid
+								  FROM {node} n WHERE n.type = :ntype', 0, 10, array(':ntype' => 'job_opening'));
+				foreach ($result as $record) {
+					$node = node_load($record->nid);
+					$loc = $node->field_location;
+					foreach ($loc as $lkey=> $locrecord) {
+							$ll = $locrecord[0];
+					}
+				}
+			
+			$reccount  = 0;
+			 foreach ($q as $row) {
+				$rowid = $row->appid;
+				//CHECK THE SUITABLE OPTIONS
+				/*$suitable_chkr = $row->suitable;
+				
+					if($suitable_chkr == "suitable"){
+						$page_content .= '<tr id="recno'.$rowid.'" style="background:#c8f440">'; 	
+					}elseif($suitable_chkr == "not-suitable"){
+						$page_content .= '<tr id="recno'.$rowid.'" style="background:#e8e5e5">'; 	
+					}else{
+						$page_content .= '<tr id="recno'.$rowid.'" style="background:#fff">'; 	
+					}*/
+				
+				$page_content .= '<td style="background-color:#666666; border-bottom:1px solid #fff; border-right:1px solid #fff" align="center">';
+				$page_content .= '<input type="checkbox" name="download[]" id="dchkbox_'.$rowid.'" class="checkbox_second" form="formdownload_Submit"  value="dchkbox_'.$rowid.'" onclick="showdownloadbutt_second(\''.$rowid.'\')"> ';
+				
+				$page_content .= '</td>'; 
+				$page_content .= '<td style="background-color:#666666; border-bottom:1px solid #fff;  color:#fff; border-right:1px solid #fff; color:#fff" align="center" onmouseover="notsuitableh(\''.$rowid.'\')" onmouseout="notsuitableo(\''.$rowid.'\')">';						
+				$page_content .= $row->suitable;
+				$page_content .= '<div id="notsuitcomment_'.$rowid.'" style="display:none; position:absolute; " class="notsuit"><textarea style="border:2px solid #ccc" id="comments_'.$rowid.'" name="notsuitcomments" cols="60" rows="3" class="form-textarea required">'.$row->notsuitable_comment.'</textarea></div>';
+				$page_content .= '</td>'; 
+				$page_content .= '<td style="background-color:#666666; border-bottom:1px solid #fff; color:#fff; border-right:1px solid #fff" align="center">';
+				$page_content .= $row->assigned_dept;
+				$page_content .= '</td>'; 
+				$page_content .= '<td style="background-color:#666666; border-bottom:1px solid #fff; color:#fff;  border-right:1px solid #fff" align="center">';
+				$page_content .= $row->assigned_job;
+				$page_content .= '</td>'; 
+				$page_content .= '<td style="display:none;">';
+				$page_content .= $row->appid; 	 
+				$page_content .= '</td>'; 
+				
+				//CHECK IF THE ASSIGNED JOB HAS CHANGED
+				$job_applied =  $row->job_title;
+				$job_assigned =  $row->assigned_job;
+				if($job_applied != $job_assigned){
+					$bgcolor = '#96c505';
+				}else{
+					$bgcolor = '#c8f440';
+				}
+				$page_content .= '<td style="background:'.$bgcolor.'  ">';
+				$page_content .= $row->job_title; 	 
+				$page_content .= '</td>'; 
+				
+				$job_location =  $row->job_location;
+				$assigned_dept =  $row->assigned_dept;
+				if($job_location != $assigned_dept){
+					$bgcolor1 = '#96c505';
+				}else{
+					$bgcolor1 = '#c8f440';
+				}
+				$page_content .= '<td style="background:'.$bgcolor1.'  ">';
+				$page_content .= $row->job_location; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" class="al">';
+				$page_content .= '<a href="application_form/edit/'. $row->appid . '">'.$row->surname.'</a>'; 	
+				$page_content .= '</td>'; 
+				$page_content .= '<td >'; 	
+				$page_content .=  $row->forname;  
+				$page_content .= '</td>'; 		
+				$page_content .= '<td >'; 	
+				$page_content .=  $row->email_add;  
+				$page_content .= '</td>'; 
+				$page_content .= '<td>'; 	
+				$page_content .=  $row->phone_no;  
+				$page_content .= '</td>'; 
+				$page_content .= '<td >'; 	
+				$page_content .=  $row->mobile_no;  
+				$page_content .= '</td>'; 
+				$page_content .= '<td >';  //***GET THE FILE ATTACHMENT LINK WITH THE USERS TABLE
+					
+					$applicantemail = $row->email_add; //GET THE EMAIL ADDRESS
+			
+					$qumail = db_query('SELECT * FROM {users} WHERE mail = :mail', array(':mail' => $applicantemail ));
+					foreach($qumail as $skey1){
+						$skey = $skey1->uid;
+					}
+					
+					$qumailfid = db_query('SELECT * FROM {file_usage} WHERE id = :id', array(':id' => $skey ));
+					foreach($qumailfid as $skeyfileid){
+						$skeyfid = $skeyfileid->fid;
+					}
+					
+					
+					$query = db_select('file_usage', 'fu');
+								$query->condition('fu.module', 'file', '=');
+								$query->condition('fu.id', $skey, '=');
+								$query->fields('fu');
+								$qwf = $query->execute();
+					
+					//print_r($qw);
+					
+					foreach ($qwf as $row1f){
+						//print_r($row1f);
+						$fid_xf = $row1f->fid;
+					}
+			
+			//echo $fid_xf;
+			
+			$qumailfile = db_query('SELECT * FROM {file_managed} WHERE fid = :fid', array(':fid' => $fid_xf ));
+			foreach($qumailfile as $skeyfile){
+				$skeyfilename = $skeyfile->filename;
+			}
+
+					
+					//$page_content .= $applicantemail .'<br/>';
+					//$page_content .= $skey  .'<br/>';
+					//$page_content .= $skeyfid  .'<br/>';
+					$page_content .= '<a href=" '.base_path().'sites/default/resume/'.$skeyfilename.' " > '.$skeyfilename  .'</a><br/>';
+				$page_content .= '</td>';  //***END GET THE FILE ATTACHMENT LINK WITH THE USERS TABLE
+				$page_content .= '</tr>';
+				$reccount = $reccount + 1;
+			}
+			
+			
+				 $page_content .= '</table>'; 	
+				 /* $page_content .='<div id="hradminnote">You must save the changes before proceeding to the next or previous page</div>';
+				  if( $page > 0)
+				 {
+					$last = $page - 2;
+					$page_content .= "<span id='pagingbutton' ><a href=' $_PHP_SELF?page=$last' disabled='true'>Last 10 Records</a> </span>";
+					if( $page > 0 and $reccount != 0 ){
+						$page_content .= "<span id='pagingbutton1'><a href=' $_PHP_SELF?page=$page' disabled='true'>Next 10 Records</a></span>";
+					}
+				 }
+			 if( $page == 0 )
+				 {
+					 $page = $page + 0;
+					 $offset =$offset + 1 ;
+					 $page_content .= "<span id='pagingbutton'><a href=' $_PHP_SELF?page=$page' disabled='true'>Next 10 Records</a></span>";
+					 $page_content .= "<span id='pagingbutton1' style='display:none'><a href=' $_PHP_SELF?page=$page' disabled='true'>Next 10 Records</a></span>";
+				}*/
+			  
+				/*$page_content .= ' <input type="submit" value="Download to file" class="downloadbutt"  form="formdownload_Submit" name="formdownloadSubmit" id="downloadbutton_second" >';  */
+				$page_content .= '</div>';
+				$page_content .= '</li>';
+				//FOURTH TAB******************************************************************************************************************************************************************************************************************//
+		}//END if the user is admin only this tab will show		
+		
+			
+			
+			$page_content  .= '<form id="deleteallfilesdownloaded" name="deleteallfilesdownloaded" method="post" action="" id="deleteallfilesdownloaded">';
+			$page_content  .= '</form >';
+			
+			if (isset($_POST['filedeleteSubmit'])) {
+					
+					 deleteallfiles();
+				
+			}
+
+				$page_content .= '<li>';
+				$page_content .= ' <input type="radio" name="tabs" id="tab5" class="tcradio" />';
+				$page_content .= '<label for="tab5" style="background:#f6653c; color:#fff">Files Downloaded</label>';
+				$page_content .= '<div id="tab-content2" class="tab-content">';
+				
+				$dir    = 'downloaded_json';
+				$file_ext = array(
+					"csv",
+					"txt",
+				);
+				$files= array_diff(scandir($dir), array('..', '.'));
+
+				
+				
+				$page_content .= '<table>'; 
+
+				foreach ($files as &$fvalue) {
+							
+					$page_content .= '<tr style="background-color:#fff;  color:#ccc; font-weight:bold; text-align:center">';  
+					
+					$page_content .= '<td class="downlf" style="border:1px solid #e8e7e6; "  align="left"  >';
+					$page_content .= '<a href=" '.base_path().'/downloaded_json/'.$fvalue.'" download="'.$fvalue.'">'.$fvalue.'</a>';
+					$page_content .= '</td>';
+					$page_content .= '</tr>';
+				}
+				
+				$page_content .= '</table>'; 	
+				$page_content .= '<input type="submit" value="delete" class="downloadbutt"  form="deleteallfilesdownloaded" name="filedeleteSubmit" id="delfbutt" >';
+				$page_content .= '</div>';
+				$page_content .= '</li>';
+
+	   $page_content .= '</ul>';
+       $page_content .= '</div >';
+		
+		//END OF THE TABS**************************************************************//
+
+	return $page_content;
+}
+
+//**********************************************************************************************************************************//
+//INDEPENDENT FUNCTIONS
+//**********************************************************************************************************************************//
+
+
+function movetoarchived(){
+	 $ma_updated = db_update('application_form') // Table name no longer needs {}
+			  ->fields(array(
+				'downloaded' => 2,
+			  ))
+			 ->condition('downloaded', 1, '=')
+			 ->condition('suitable', 'NULL', '!=')
+			  ->execute();
+}
+
+
+//DOWNLOAD THE DATA FOR JSON AND SET THE DOWNLOADED TO 1
+function downloaddata($dataid){
+	//echo $dataid . '<br/>';
+	$dappid = explode("_", $dataid);
+	$dappid = $dappid[1];
+	//$qd = db_query('SELECT * FROM {application_form} WHERE appid = :appid', array(':appid' => $dappid));
+	
+	$var = json_encode(
+        db_query("SELECT * FROM {application_form} WHERE appid = :appid",  array(":appid" => $dappid))->fetchAll()
+    );
+	$username = $GLOBALS['user']->name;
+	//print_r($gg);
+	$today = date("Ymdhisa"); 
+    $file = 'downloaded_json/'.$today.'_'.$username.'.txt';
+	$current = file_get_contents($file);
+	$current .= $var ." \n";
+	file_put_contents($file, $current);
+	
+	//UPDATE THE STATUS OF THE DOWNLOADED DATA 
+	$download_update = db_update('application_form') // Table name no longer needs {}
+	  ->fields(array(
+		'downloaded' => 1,
+	  ))
+	  ->condition('appid', $dappid)
+	  ->execute();
+	 // echo $num_updated;
+	
+	
+	$qd = db_query('SELECT * FROM {application_form} WHERE appid = :appid', array(':appid' => $dappid));
+	
+	$dcontent = "";
+	foreach($qd as $rowd){
+				
+		$dcontent .= $rowd -> appid . ',';
+		$dcontent .= $rowd -> suitable. ',';
+		$dcontent .= $rowd -> notsuitable_comment. ',';
+		$dcontent .= $rowd -> assigned_dept. ',';
+		$dcontent .= $rowd -> assigned_job. ',';
+		$dcontent .= $rowd -> job_title. ',';
+		$dcontent .= $rowd -> job_location. ',';
+		$dcontent .= $rowd -> surname. ',';
+		$dcontent .= $rowd -> forname. ',';
+		$dcontent .= $rowd -> title. ',';
+		$dcontent .= $rowd -> email_add. ',';
+		$dcontent .= $rowd -> address. ',';
+		$dcontent .= $rowd -> phone_no. ',';
+		$dcontent .= $rowd -> mobile_no. ',';
+		$dcontent .= $rowd -> hear_about_us. ',';
+		$dcontent .= $rowd -> recommend. ',';
+		$dcontent .= $rowd -> current_drivers_lic. ',';
+		$dcontent .= $rowd -> free_endorsement. ',';
+		$dcontent .= $rowd -> free_endorsement_no_details. ',';
+		$dcontent .= $rowd -> own_means_transpo. ',';
+		$dcontent .= $rowd -> preparedtodrivepatient;
+		$dcontent .= $rowd -> preparedtodrivepatient_no. ',';
+		$dcontent .= $rowd -> nationalinsuranceno. ',';
+		$dcontent .= $rowd -> previousworkus. ',';
+		$dcontent .= $rowd -> previousworkus_yes. ',';
+		$dcontent .= $rowd -> organisation. ',';
+		$dcontent .= $rowd -> will_work_other. ',';
+		$dcontent .= $rowd -> fulltime_work. ',';
+		$dcontent .= $rowd -> part_time_details. ',';
+		$dcontent .= $rowd -> date_available. ',';
+		$dcontent .= $rowd -> present_employment. ',';
+		$dcontent .= $rowd -> employer_details. ',';
+		$dcontent .= $rowd -> position_held. ',';
+		$dcontent .= $rowd -> reason_leaving. ',';
+		$dcontent .= $rowd -> emp_date_from. ',';
+		$dcontent .= $rowd -> support_application. ',';
+		$dcontent .= $rowd -> he_examination. ',';
+		$dcontent .= $rowd -> he_level. ',';
+		$dcontent .= $rowd -> he_subject. ',';
+		$dcontent .= $rowd -> he_grade. ',';
+		$dcontent .= $rowd -> u_namelocation. ',';
+		$dcontent .= $rowd -> u_qualification. ',';
+		$dcontent .= $rowd -> u_grade. ',';
+		$dcontent .= $rowd -> professional_qual. ',';
+		$conviction = $rowd -> conviction. ',';
+		$dcontent .= $rowd -> conviction_details. ',';
+		$dcontent .= $rowd -> disciplinary_actions. ',';
+		$dcontent .= $rowd -> disciplinary_details. ',';
+		$dcontent .= $rowd -> ongoing_investigation. ',';
+		$dcontent .= $rowd -> ongoing_investigation_details. ',';
+		$dcontent .= $rowd -> reference1_name. ',';
+		$dcontent .= $rowd -> reference1_occupation. ',';
+		$dcontent .= $rowd -> reference1_email. ',';
+		$dcontent .= $rowd -> reference1_telno. ',';
+		$dcontent .= $rowd -> reference1_address. ',';
+		$dcontent .= $rowd -> reference2_name. ',';
+		$dcontent .= $rowd -> reference2_telno. ',';
+		$dcontent .= $rowd -> reference2_occupation. ',';
+		$dcontent .= $rowd -> reference2_address. ',';
+		$dcontent .= $rowd -> reference2_email. ',';
+		$dcontent .= $rowd -> file;
+	}
+	
+
+	$exfile = 'downloaded_json/'.$today.'_'.$username.'.csv';
+	$currentx = file_get_contents($exfile);
+	$currentx .= $dcontent ." \n";
+	file_put_contents($exfile, $currentx);
+	
+	
+}// END downloaddata
+ 
+
+function saves_suitableoption($cvrecordnumber, $cvsuitable, $notsuitcomments){
+	$num_updated = db_update('application_form') // Table name no longer needs {}
+	  ->fields(array(
+		'suitable' => $cvsuitable,
+		'notsuitable_comment' => $notsuitcomments,
+	  ))
+	  ->condition('appid', $cvrecordnumber)
+	  ->execute();
+	 // echo $num_updated;
+}
+
+function saves_assignedjob($adv_value, $adv_recordnumber){
+	$num_updated = db_update('application_form') // Table name no longer needs {}
+	  ->fields(array(
+		'assigned_dept' => $adv_value,
+		'suitable' => 'suitable',
+	  ))
+	  ->condition('appid', $adv_recordnumber)
+	  ->execute();
+	  
+	 // echo $num_updated;
+}
+
+
+function saves_assignedjob_job($adv_value,  $adv_recordnumber, $assignedjob_values){
+	//echo  $assignedjob_values;
+	$num_updated = db_update('application_form') // Table name no longer needs {}
+	  ->fields(array(
+		'assigned_job' => $assignedjob_values,
+		'assigned_dept' => $adv_value,
+		'suitable' => 'suitable',
+	  ))
+	  ->condition('appid', $adv_recordnumber)
+	  ->execute();
+	  
+	 // echo $num_updated;
+}
+
+
+function save_applicants_changes(){
+	$page_content = '';
+	$page_content .= '<h1>Saving data</h1>';
+	return $page_content;
+}
+
+function deleteallfiles(){
+	
+	$dir   = 'downloaded_json/';
+	//echo $dir;
+		foreach (glob($dir."/*.*") as $filename) {
+		if (is_file($filename)) {
+			unlink($filename);
+		}
+	}
+}
+
+
+//**********************************************************************************************************************************//
+//END INDEPENDENT FUNCTIONS
+//**********************************************************************************************************************************//
+
+
+//**********************************************************************************************************************************//
+//******************************************** APPLICANT DATA *************************************************************//
+//**********************************************************************************************************************************//
+
+
+//**********************************************************************************************************************************//
+//*** DOWNLOAD THE APPLICATION DATA IN PDF FORMAT ***//
+//**********************************************************************************************************************************//
+function print_applicants_data(){
+
+	//GET THE URL 
+    $actual_link = "http://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
+	$exploded_url = explode( "/", $actual_link ); 
+	$dp_appd = $exploded_url[9]; //**FOR LOCAL HOSTING
+	$pdf_qd = db_query('SELECT * FROM {application_form} WHERE appid = :appid', array(':appid' => $dp_appd));
+	
+	
+	$pdf = new FPDF();
+	$pdf->AddPage();
+	$pdf->SetFont('Arial','B',11);
+	
+	$pdf->Image('sites/default/resume/logo.png',70,'C',80);
+	$pdf->Ln(20);
+	
+	
+	
+	foreach($pdf_qd as $row_pdf){
+		
+		$pdf->setFillColor(40,40,40); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->SetTextColor( 252, 252, 252 );
+		$pdf->Cell(30,8, 'APPLIED JOB TITLE' ,0,0,'L',1);
+		$pdf->SetTextColor( 37, 37, 38 );
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(60,8, $row_pdf -> job_title );
+		
+		$pdf->setFillColor(40,40,40); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->SetTextColor( 252, 252, 252 );
+		$pdf->Cell(50,8, 'APPLIED JOB LOCATION' ,0,0,'L',1);
+		$pdf->SetTextColor( 37, 37, 38 );
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(50,8, $row_pdf -> job_location );
+		$pdf->Ln(10);	
+		
+		
+		$pdf->setFillColor(113,116,172); 
+		$pdf->SetFont('Arial','B',12);
+		$pdf->SetTextColor( 252, 252, 252 );
+		$pdf->Cell(190,10,'PERSONAL INFORMATION',1,2,'C', 1);
+		$pdf->Ln(5);	
+		$pdf->SetTextColor( 37, 37, 38 );
+		
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(20,8, 'Surname' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(40,8, $row_pdf -> surname );
+
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(20,8, 'Forename' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(40,8, $row_pdf -> forname );
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(20,8, 'Email Address' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(20,8, $row_pdf -> email_add );
+		$pdf->Ln(10,5);
+
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(50,8, 'Phone Number' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(30,8, $row_pdf -> phone_no );
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(50,8, 'Mobile Number' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(30,8, $row_pdf -> mobile_no );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(20,8, 'Address' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(20,8, $row_pdf -> address );
+		$pdf->Ln(10,5);
+		
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(100,8, 'Where did the applicant hear about the Jeesal Group?' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(20,8, $row_pdf -> hear_about_us );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(190,8, 'Recommended by anyone who works at the Jeesal Group' ,0,0,'L',1);
+		$pdf->Ln(10,5);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Multicell(190,3, $row_pdf -> recommend );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(80,8, 'Does the applicant have a full current driving licence?' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(20,8, $row_pdf -> current_drivers_lic );
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(80,8, 'Does the applicant driving licence free of endorsements?' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(20,8, $row_pdf -> free_endorsement );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(80,8, 'Details if its not endorsement' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(20,8, $row_pdf -> free_endorsement_no_details );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(70,8, 'Does the applicant have own means of transport?' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(15,8, $row_pdf -> own_means_transpo );
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(90,8, 'Would the applicant be prepared to drive patients/tenants/service' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(20,8, $row_pdf -> preparedtodrivepatient );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(70,8, 'Details If NO' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(20,8, $row_pdf -> preparedtodrivepatient_no );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30,8, 'National insurance no' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(35,8, $row_pdf -> nationalinsuranceno );
+		$pdf->Ln(10,5);	
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(35,8, 'Previously worked for us' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(15,8, $row_pdf -> previousworkus );
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(60, 8, 'If yes, when and in what capacity.' ,0,0,'L',1);
+		$pdf->Ln(10,5);	
+		
+		$pdf->SetFont('Arial','',10);
+		$pdf->Multicell(190,3, $row_pdf -> previousworkus_yes );
+		$pdf->Ln(10,5);
+		
+		
+		
+		$pdf->setFillColor(113,116,172); 
+		$pdf->SetFont('Arial','B',12);
+		$pdf->SetTextColor( 252, 252, 252 );
+		$pdf->Cell(190,10,'EMPLOYMENT DETAILS',1,2,'C', 1);
+		$pdf->Ln(5);	
+		$pdf->SetTextColor( 37, 37, 38 );
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(110, 8, 'If applicant offered this position, will he/she continue to work in any other capacity?.' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(5,8, $row_pdf -> will_work_other );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(60, 8, 'Would you work full time?.' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(35,8, $row_pdf -> fulltime_work );
+		
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(60, 8, 'Preferred days/hours	.' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(35,8, $row_pdf -> part_time_details );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(80, 8, 'Date would the applicant be available.' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(35,8, $row_pdf -> date_available );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(80, 8, 'Present Employment' ,0,0,'L',1);
+		$pdf->Ln(10,5);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->multicell(190,3, $row_pdf -> present_employment );
+		$pdf->Ln(10,5);
+		
+		
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(65, 8, 'Employers name, address and nature of business' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Multicell(125,3, $row_pdf -> employer_details );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'Position held' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(35,8, $row_pdf -> position_held );
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'Dates from and to' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(35,8, $row_pdf -> emp_date_from );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(50, 8, 'Reason for leaving' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Multicell(130,3, $row_pdf -> reason_leaving );
+		$pdf->Ln(10,5);
+		
+		
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(65, 8, 'Employers name, address and nature of business' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Multicell(125,3, $row_pdf -> employer_details_two );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'Position held' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(35,8, $row_pdf -> position_held_two );
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'Dates from and to' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(35,8, $row_pdf -> emp_date_frome_two );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(50, 8, 'Reason for leaving' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Multicell(130,3, $row_pdf -> reason_leaving_two );
+		$pdf->Ln(10,5);
+		
+		
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(65, 8, 'Employers name, address and nature of business' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Multicell(125,3, $row_pdf -> employer_details_thr );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'Position held' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(35,8, $row_pdf -> position_held_thr );
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'Dates from and to' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(35,8, $row_pdf -> emp_date_from_thr );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(50, 8, 'Reason for leaving' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Multicell(130,3, $row_pdf -> reason_leaving_thr );
+		$pdf->Ln(10,5);
+		
+
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(80, 8, 'STATEMENT IN SUPPORT OF APPLICATION' ,0,0,'C',1);
+		$pdf->Ln(10,5);
+		
+		
+		$pdf->SetFont('Arial','',10);
+		$pdf->Multicell(190,5, $row_pdf -> support_application );
+		$pdf->Ln(10,5);
+		
+		
+		$pdf->setFillColor(113,116,172); 
+		$pdf->SetFont('Arial','B',12);
+		$pdf->SetTextColor( 252, 252, 252 );
+		$pdf->Cell(190,10,'EDUCATIONAL BACKGROUND',1,2,'C', 1);
+		$pdf->Ln(3);	
+		$pdf->SetTextColor( 37, 37, 38 );
+		
+		$pdf->setFillColor(174,174,212); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->SetTextColor( 254, 254, 254 );
+		$pdf->Ln(2);	
+		$pdf->MULTICELL(190, 9, '(Proof of qualifications will be requested before appointment) Further & Higher Education (Degree, Diploma, BTEC, City & Guilds, NVQ or equivalent)' ,0,0,'L',1);
+		$pdf->Ln(5);	
+		$pdf->SetTextColor( 37, 37, 38 );
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'Examination' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(35,8, $row_pdf -> he_examination );
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, '	Level' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(35,8, $row_pdf -> he_level );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'Subjects' ,0,0,'L',1);
+
+		$pdf->SetFont('Arial','B',10);
+		$pdf->cell(90,5, $row_pdf -> he_subject );
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'Grade' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(35,8, $row_pdf -> he_grade );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'Examination' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(35,8, $row_pdf -> he_examination_tw );
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, '	Level' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(35,8, $row_pdf -> he_level_tw );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'Subjects' ,0,0,'L',1);
+
+		$pdf->SetFont('Arial','B',10);
+		$pdf->cell(90,5, $row_pdf -> he_subject_tw  );
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'Grade' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(35,8, $row_pdf -> he_grade_tw  );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'College or University' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(90,5, $row_pdf -> u_namelocation );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, '	Qualification Gained' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Multicell(90,5, $row_pdf -> u_qualification );
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, '	Grade' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->multicell(35,5, $row_pdf -> u_grade );
+		$pdf->Ln(10,5);
+		
+		
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'College or University' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(90,5, $row_pdf -> u_namelocation_tw );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, '	Qualification Gained' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Multicell(90,5, $row_pdf -> u_qualification_tw );
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, '	Grade' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->multicell(35,5, $row_pdf -> u_grade_tw );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(180, 8, 'Professional qualifications and membership of professional organisations' ,0,0,'L',1);
+		$pdf->Ln(10,5);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(160,8, $row_pdf -> professional_qual );
+		$pdf->Ln(10,5);
+		
+		
+		$pdf->setFillColor(113,116,172); 
+		$pdf->SetFont('Arial','B',12);
+		$pdf->SetTextColor( 252, 252, 252 );
+		$pdf->Cell(190,10,'MISCELLANOUS',1,2,'C', 1);
+		$pdf->Ln(5);	
+		$pdf->SetTextColor( 37, 37, 38 );
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(160, 8, 'Have the applicant ever been convicted by the courts or cautioned, reprimanded or given a final warning by police?' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(160,8, $row_pdf -> conviction );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(70, 8, 'If yes, details of offences, penalties and dates' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(100,8, $row_pdf -> conviction_details );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(160, 8, 'Have the client ever been subject to disciplinary action in your current or previous employment' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(160,8, $row_pdf -> disciplinary_actions );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(70, 8, 'If yes, details including outcome and relevant dates' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(100,8, $row_pdf -> disciplinary_details );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(160, 8, 'Are the applicant the subject of any ongoing investigations or disciplinary action' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(160,8, $row_pdf -> ongoing_investigation );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(70, 8, 'If yes, details including outcome and relevant dates' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(100,8, $row_pdf -> ongoing_investigation_details );
+		$pdf->Ln(10);
+		
+		$pdf->setFillColor(113,116,172); 
+		$pdf->SetFont('Arial','B',12);
+		$pdf->SetTextColor( 252, 252, 252 );
+		$pdf->Cell(190,10,'REFERENCE',1,2,'C', 1);
+		$pdf->Ln(5);	
+		$pdf->SetTextColor( 37, 37, 38 );
+		
+		$pdf->setFillColor(174,174,212); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->SetTextColor( 254, 254, 254 );
+		$pdf->Ln(3);	
+		$pdf->MULTICELL(190, 5, 'Please give details of two employment referees from your two most recent employers, one of whom must be your current employer, if applicable. If you have not held a position of paid employment, you may give details of a referee from any unpaid or voluntary work undertaken or any period of study.' ,0,3,'C',1);
+		$pdf->Ln(10);	
+		$pdf->SetTextColor( 37, 37, 38 );
+		
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'Name' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(40,8, $row_pdf -> reference1_name );
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'Occupation' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(80,8, $row_pdf -> reference1_occupation );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'Telephone Number' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(40,8, $row_pdf -> reference1_telno );
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'Email' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(65,8, $row_pdf -> reference1_email );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'Address' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',9);
+		$pdf->cell(190,3, $row_pdf -> reference1_address  );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'Name' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(40,8, $row_pdf -> reference2_name );
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'Occupation' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(80,8, $row_pdf -> reference2_occupation );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'Telephone Number' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(40,8, $row_pdf -> reference2_telno );
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'Email' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',10);
+		$pdf->Cell(65,8, $row_pdf -> reference2_email );
+		$pdf->Ln(10,5);
+		
+		$pdf->setFillColor(230,230,230); 
+		$pdf->SetFont('Arial','I',8);
+		$pdf->Cell(30, 8, 'Address' ,0,0,'L',1);
+		
+		$pdf->SetFont('Arial','B',9);
+		$pdf->cell(190,3, $row_pdf -> reference2_address  );
+		$pdf->Ln(10,5);
+		
+	}
+	
+	$pdf->Output();
+	
+}
+
+
+
+function view_applicants_data(){
+	$page_content = '';
+
+	//GET THE DATA ID TO DOWNLOAD AND CALL FUNCTION downloaddata($dataid)****************************************//
+		if (isset($_POST['reassignedappdata_submit'])) {
+			
+			 $appdata_suitableselectt = $_POST['appdata_suitableselectt'];
+			 
+			 if($appdata_suitableselectt == "nr"){
+				 $appdata_suitableselectt = "suitable";
+			 }
+			 $appdata_suitabledept = $_POST['appdata_suitabledept'];
+			 $appdata_suitablejob = $_POST['appdata_suitablejob'];
+			 $appdata_suitableselecttcomment = $_POST['appdata_suitableselecttcomment'];
+			 $appid_assigned = $_POST['appid_assigned'];
+			 
+			  // $page_content .=  $appdata_suitableselectt;
+			 // $page_content .=  $appdata_suitabledept;
+			 //  $page_content .=  $appdata_suitablejob;
+			 //   $page_content .=  $appid_assigned;
+			   
+			   
+			 $num_updated = db_update('application_form') // Table name no longer needs {}
+			  ->fields(array(
+				'notsuitable_comment' => $appdata_suitableselecttcomment,
+				'suitable' => $appdata_suitableselectt,
+				'assigned_dept' => $appdata_suitabledept,
+				'assigned_job' => $appdata_suitablejob,
+			  ))
+			 ->condition('appid', $appid_assigned)
+			  ->execute();
+			
+		}
+		//GET THE DATA ID TO DOWNLOAD AND CALL FUNCTION downloaddata($dataid)****************************************//
+		
+		
+		
+		/*******************************************************************************************************************************/
+		//****************************************NOTE TO SELF:CHANGE THIS WHEN TRANSFERING TO LOCAL AND SERVER*****************************************************************/
+		/*******************************************************************************************************************************/
+		
+	$page_content .= '<h1>Applicants Data</h1>';
+	$page_content .= '<a href="'.base_path().'admin/config/people/application_form">Return to Applicants list</a> <br/>';
+	
+	//GET THE URL 
+    $actual_link = "http://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
+	$exploded_url = explode( "/", $actual_link ); 
+	//print_r($exploded_url);
+	//$appd = $exploded_url[10];  //**FOR STAGING HOSTING
+	$appd = $exploded_url[9]; //**FOR LOCAL HOSTING
+	
+	//$page_content .= $appd;
+	//$page_content .= '<a href="67">nex</a>'; 	
+	
+	
+	//GET THE USER ROLES
+global $user;
+$gg = $GLOBALS['user']->roles;
+//print_r($GLOBALS['user']->roles);
+$userdepartment =  end($gg); 
+$userdepartment = explode('-', $userdepartment);
+$userdepartment =  $userdepartment[1];
+$userdepartment = rtrim($userdepartment);
+
+//echo $userdepartment;				
+	
+
+	//$page_content .= $userdepartment;
+	
+	//*****************GET THE PREVIOUS RECORD ID*********//
+	$prv_query = db_select('application_form', 'appl');
+					$prv_query->condition('appl.appid', $appd, '<');
+					if($userdepartment != '' and $userdepartment != 'Cawston Park'){
+						$prv_query->condition('appl.assigned_dept', $userdepartment, '=');
+					};
+					$prv_query->fields('appl');
+					$prv_query ->orderBy('appid', 'ASC'); 
+					$qprv = $prv_query->execute();
+					//print_r($qprv);	
+					foreach ($qprv as $qprv_key){
+						//echo '<pre>';
+						//print_r($qprv_key);
+						//echo '</pre>';
+						$prvid = $qprv_key->appid;
+						$prvname =  $qprv_key->forname. ' ' .$qprv_key->surname;
+						$prvposition =  $qprv_key->assigned_job;
+					}
+					
+	if($prvname != ''){
+		$page_content .= '<div id="prev_rec">';
+		$page_content .= '<span>';
+		$page_content .= $prvname;
+		$page_content .= '</span>';
+		$page_content .= '<span class="nxtp">';
+		$page_content .= $prvposition;
+		$page_content .= '</span>';
+		$page_content .= '<span>';
+		$page_content .= '<a href="'.$prvid.'">Previous</a>'; 	
+		$page_content .= '</div>';
+	}
+	
+	//*****************end GET THE PREVIOUS RECORD ID*********//
+	
+	
+	//*****************GET THE NEXT RECORD ID*********//
+	$nxt_query = db_select('application_form', 'appl');
+					$nxt_query->condition('appl.appid', $appd, '>');
+					if($userdepartment != '' and $userdepartment != 'Cawston Park'){
+						$nxt_query->condition('appl.assigned_dept', $userdepartment, '=');
+					};
+					$nxt_query->fields('appl');
+					$nxt_query ->orderBy('appid', 'DESC'); 
+					$qnxt = $nxt_query->execute();
+					//print_r($qnxt);	
+					foreach ($qnxt as $qnxt_key){
+						//echo '<pre>';
+						//print_r($qprv_key);
+						//echo '</pre>';
+						$nxtid = $qnxt_key->appid;
+						$nxtname =  $qnxt_key->forname. ' ' .$qnxt_key->surname;
+						$nxtposition =  $qnxt_key->assigned_job;
+					}
+	if($nxtname != ''){
+		$page_content .= '<div id="next_rec">';
+		$page_content .= '<span>';
+		$page_content .= $nxtname;
+		$page_content .= '</span>';
+		$page_content .= '<span class="nxtp">';
+		$page_content .= $nxtposition;
+		$page_content .= '</span>';
+		$page_content .= '<span>';
+		$page_content .= '<a href="'.$nxtid.'">
+									Next Record
+								</a>'; 	
+		$page_content .= '</span>';						
+		$page_content .= '</div>';
+	}
+	
+	//*****************end GET THE NEXT RECORD ID*********//
+	
+	
+	
+	$q = db_query('SELECT * FROM {application_form} WHERE appid = :appid', array(':appid' => $appd));
+	foreach ($q as $row){
+		
+		
+			/*******************************************************************************************************************************/
+			
+					
+					$page_content  .= '<form name="appdata_reassignedform" method="post" action="" id="assignedform">';
+						$page_content .= '<table style="font-size:13px; line-height:20px; font-family:arial; margin-top:40px" class="applicantsdata">';
+						$page_content .= '<tr>';
+							$page_content .= '<td style="border:1px solid #ccc; color:#fff; background:#5d5d96; text-transform:uppercase; text-align:center" >';
+							$page_content .= '<strong>Review Grade</strong>'; 	 
+							$page_content .= '</td>';
+							
+							//ASSIGNED SUITABLE NOT SUITABLE
+							$page_content .= '<td style="border:1px solid #ccc; color:#000; background:#acacc5; text-transform:uppercase; text-align:center" >';
+							$hradmincomment =  $row->suitable;
+							
+								$page_content .= "<select id ='suitableadmin'  onchange='he()'  class='suitableselect' name='appdata_suitableselectt' onmouseover='notsuitableapp()' onmouseout='notsuitableappo()'>";
+								if($hradmincomment != "NULL"){
+									$page_content .= "<option value=$row->suitable>$row->suitable</option>";
+								}else{
+									$page_content .= "<option value='nr'>Not Review Yet</option>";
+								};
+								
+								$page_content .= "<option value='nr'>Not yet reviewed</option>";
+								$page_content .= "<option value='suitable'>suitable</option>";
+								$page_content .= "<option value='not-suitable'>not-suitable</option>";
+								$page_content .= "</select  >";
+								
+										$page_content .= "<div id='popupnonsuit_comment' >";
+											$page_content .= '<textarea style="border:2px solid #ccc" id="comments_'.$rowid.'" name="appdata_suitableselecttcomment" cols="60" rows="3" class="form-textarea required" ></textarea>';
+										$page_content .= "</div>";
+								
+								
+								
+								if($hradmincomment  == "not-suitable"){
+									$page_content .= "<div id='popupnonsuit' >";
+										$page_content .= "<strong>HR comments </strong></br>";
+										$page_content .= $row->notsuitable_comment;
+									$page_content .= "</div>";
+								}	
+							$page_content .= '</td>'; 
+							
+							//ASSIGNED DEPT
+								$job_location =  $row->job_location;
+								$assigned_dept =  $row->assigned_dept;
+								if($job_location != $assigned_dept){
+									$selectoption_d = $assigned_dept;
+								}else{
+									$selectoption_d = 'Select Department';
+								}
+							$page_content .= '<td style="border:1px solid #ccc; color:#fff;  background:#5d5d96; text-transform:uppercase; text-align:center" >';
+							$page_content .= '<strong>Assign Department</strong>'; 	 
+							$page_content .= '</td>';
+							
+							$info = field_info_field('field_location');
+							$options = $info['settings']['allowed_values'];
+							
+							$page_content .= '<td style="border:1px solid #ccc; color:#000; background:#acacc5; text-transform:uppercase; text-align:center" >';
+								$page_content .= "<select  class='suitableselect' name='appdata_suitabledept'>";
+								$page_content .= "<option value= $row->assigned_dept> $row->assigned_dept </option>";
+								foreach ($options as $key => $row1) {
+									$page_content .= "<option value='.$row1.'> $row1 </option>";
+								}
+								$page_content .= "</select  >";
+							$page_content .= '</td>'; 
+							
+						    $page_content .= '<td style="border:1px solid #ccc; color:#fff; text-transform:uppercase; text-align:center; background:#5d5d96" >';
+							$page_content .= '<strong>Assign Job</strong>'; 	 
+							$page_content .= '</td>';
+							
+							$page_content .= '<td style="border:1px solid #ccc; color:#000; background:#acacc5; text-transform:uppercase; text-align:center" >';	
+								$page_content .= "<select  class='assignedjobdropdown' name='appdata_suitablejob'>";
+									$page_content .= "<option value=$row->assigned_job>$row->assigned_job</option>";
+									$result = db_query_range('SELECT n.nid
+										FROM {node} n WHERE n.type = :ntype', 0, 10, array(':ntype' => 'job_opening'));
+										foreach ($result as $record) {
+											$node = node_load($record->nid);
+											$title_job = $node->title;
+											$page_content .= '	<option value="'.$title_job.'" >'.$title_job.'</option>';
+										}
+								$page_content .= "</select  >";
+							
+							$page_content .= '</td>'; 
+							$page_content .= '<td style="display:none">'; 
+								$page_content .= ' <input type="text" name="appid_assigned" value = '. $row->appid .' >';  
+							$page_content .= '</td>'; 
+							
+							$page_content .= '<td class="reassignedtd" style="border:1px solid #ccc; color:#000; text-transform:uppercase; text-align:center; margin:0px; padding:0px; background:#f6653c" >';
+								$page_content .= ' <input type="submit" value="Re-assigned" class="reassigned" name="reassignedappdata_submit" >';  
+							$page_content .= '</td>'; 
+							
+						$page_content .= '</tr>';
+						$page_content .= '</table >';
+					$page_content .= '</form >';
+					
+					
+				
+
+			$page_content .= '<table style="font-size:13px; line-height:20px; font-family:arial; margin-top:40px" class="applicantsdata">';
+			
+			
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border-top:3px solid #000; background-color:#739aa7; color:#fff; text-transform:uppercase; text-align:center; height:30px" colspan = 6>';
+			$page_content .= '<h2>PERSONAL PROFILE</h2>';
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border:1px solid #ccc; background-color:#000; color:#fff; text-transform:uppercase; text-align:center" >';
+			$page_content .= '<strong>APPLIED JOB TITLE</strong>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #ccc; background-color:#5d5d96; color:#fff; text-transform:uppercase; text-align:left"  colspan = 2>';
+			$page_content .=  $row->job_title;
+			$page_content .= '</td>'; 
+			
+			$page_content .= '<td style="border:1px solid #ccc; background-color:#000; color:#fff; text-transform:uppercase; text-align:center" width="200">';
+			$page_content .= '<strong>APPLIED LOCATION</strong>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #ccc; background-color:#5d5d96; color:#fff; text-transform:uppercase; text-align:left"  colspan = 2>';	
+			$page_content .=  $row->job_location;  
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+
+			$applicantemail_0 = $row->email_add; //GET THE EMAIL ADDRESS
+			
+			$qumail = db_query('SELECT * FROM {users} WHERE mail = :mail', array(':mail' => $applicantemail_0 ));
+			foreach($qumail as $skey1){
+				$skey = $skey1->uid;
+			}
+			
+			$query = db_select('file_usage', 'fu');
+						$query->condition('fu.module', 'user', '=');
+						$query->condition('fu.id', $skey, '=');
+						$query->fields('fu');
+						$qw = $query->execute();
+			
+			//print_r($qw);
+			
+			foreach ($qw as $row1){
+				//print_r($row1);
+				$fid_x = $row1->fid;
+			}
+			
+			//echo $fid_x;
+			
+			$qumailfile_pic = db_query('SELECT * FROM {file_managed} WHERE fid = :fid', array(':fid' => $fid_x));
+			foreach($qumailfile_pic as $skeyfile_pic){
+				$skeyfilename_pic = $skeyfile_pic->filename;
+			}
+
+			$page_content .= '<tr>';
+			
+
+			$page_content .= '</tr>';
+			
+			$page_content .= '<tr>';
+			//$page_content .= '<td style="border:1px solid #e0e0d8">'; 	
+			//$page_content .= '<img src="'.base_path().'sites/default/resume/pictures/'.$skeyfilename_pic.'" style="width:100%">';
+			//$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" colspan = 7>'; 	
+				$page_content .= '<table>';
+				$page_content .= '<tr>';
+					$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+					$page_content .= '<strong>Name</strong>'; 	 
+					$page_content .= '</td>';
+					$page_content .= '<td style="border:1px solid #e0e0d8">'; 	
+					$page_content .=  $row->title;
+					$page_content .=  '  ';  			
+					$page_content .=  $row->forname;  
+					$page_content .= '</td>'; 
+					
+					$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+					$page_content .= '<strong>Surname</strong>'; 	 
+					$page_content .= '</td>';
+					$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+					$page_content .=  $row->surname;  
+					$page_content .= '</td>'; 
+					$page_content .= '<td style="width:2%; background-color:#e0e0d8" width="10%">';
+					$page_content .= '<span>Email Address</span>'; 	
+					$page_content .= '</td>';
+					$page_content .= '<td class="appemail"  style="border:1px solid #e0e0d8">'; 	
+					$page_content .= '<strong> <a href="mailto: '.$row->email_add.'"> '.$row->email_add.'</a></strong>';  
+					$page_content .= '</td>';
+					$page_content .= '<td  class="pdfcv" style="border:1px solid #e0e0d8">'; 	
+					$page_content .= '<a href=" '.base_path().'admin/config/people/application_form/print/'. $row->appid . '" target="_blank">Print</a>';  
+					$page_content .= '</td>';
+					
+				$page_content .= '</tr>';
+				$page_content .= '</table>';
+				$page_content .= '<table>';
+				$page_content .= '<tr>';
+					
+					$page_content .= '<td style="border:1px solid #ccc; width:2%; background-color:#e0e0d8">';
+					$page_content .= '<span>Phone Number</span>'; 	 
+					$page_content .= '</td>';
+					$page_content .= '<td style="border:1px solid #e0e0d8">'; 	
+					$page_content .= '<strong>'.$row->phone_no.'</strong>';  
+					$page_content .= '</td>'; 
+					$page_content .= '<td style="border:1px solid #ccc; width:2%; background-color:#e0e0d8">';
+					$page_content .= '<span>Cell Phone Number</span>'; 	 
+					$page_content .= '</td>';
+					$page_content .= '<td style="border:1px solid #e0e0d8">'; 	
+					$page_content .=  '<strong>'.$row->phone_no.'</strong>';  
+					$page_content .= '</td>'; 
+					$page_content .= '<td style="border:1px solid #ccc; width:2%; background-color:#e0e0d8">';
+					$page_content .= '<span>Address</span>'; 	 
+					$page_content .= '</td>';
+					$page_content .= '<td style="border:1px solid #e0e0d8; width:50%;" >'; 	
+					$page_content .= '<strong>'.$row->address.'</strong>';  
+					$page_content .= '</td>'; 
+				$page_content .= '</tr>';
+				$page_content .= '</table>';
+			$page_content .= '</tr>';
+			
+
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+			$page_content .= '<span>Where did the applicant hear about the Jeesal Group?</span>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+			$page_content .=  '<strong>'.$row->hear_about_us.'</strong>';  
+			$page_content .= '</td>'; 
+			
+			$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+			$page_content .= '<span>Recommended by anyone who works at the Jeesal Group</span>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" colspan = 5>'; 	
+			$page_content .=  '<strong>'.$row->recommend.'</strong>';  
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" colspan = 8>'; 	
+			$page_content .= '<table>';
+			
+				$page_content .= '<tr>';
+				$page_content .= '<td style="border:1px solid #ccc; background-color:#e0e0d8" width="10%">';
+				$page_content .= '<span>Does the applicant  have a full current driving licence? </span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8;" width="10%" >'; 	
+				$page_content .=  '<strong>'.$row->current_drivers_lic.'</strong>';  
+				$page_content .= '</td>'; 
+				
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8" width="10%">';
+				$page_content .= '<span>Does the applicant  driving licence  free of endorsements? </span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8; " width="10%" >'; 	
+				$page_content .=  '<strong>'.$row->free_endorsement.'</strong>';  
+				$page_content .= '</td>'; 
+
+				
+				$page_content .= '<td style="border:1px solid #ccc; width:5%; background-color:#e0e0d8" width="10%">';
+				$page_content .= '<span>Details if its not endorsement </span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8;  "  width="30%">'; 	
+				$page_content .=  '<strong>'.$row->free_endorsement_no_details.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '</tr>';
+						
+				$page_content .= '<tr>';
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Does the applicant have own means of transport?</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8; width:5%;" >'; 	
+				$page_content .=  '<strong>'.$row->own_means_transpo.'</strong>';  
+				$page_content .= '</td>'; 
+				
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Would the applicant be prepared to drive patients/tenants/service  </span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8; width:2%;" >'; 	
+				$page_content .=  '<strong>'.$row->preparedtodrivepatient.'</strong>';  
+				$page_content .= '</td>'; 
+
+				
+				$page_content .= '<td style="border:1px solid #ccc; width:5%; background-color:#e0e0d8">';
+				$page_content .= '<span>Details If NO</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8;  width:25%" >'; 	
+				$page_content .=  '<strong>'.$row->preparedtodrivepatient_no.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '</tr>';
+			
+				$page_content .= '<tr>';
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>National insurance no </span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8; width:5%;" >'; 	
+				$page_content .=  '<strong>'.$row->nationalinsuranceno.'</strong>';  
+				$page_content .= '</td>'; 
+				
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Previously worked for us  </span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8; width:2%;" >'; 	
+				$page_content .=  '<strong>'.$row->previousworkus.'</strong>';  
+				$page_content .= '</td>'; 
+
+				
+				$page_content .= '<td style="border:1px solid #ccc; width:5%; background-color:#e0e0d8">';
+				$page_content .= '<span>If yes, when and in what capacity.</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8;  width:25%" >'; 	
+				$page_content .=  '<strong>'.$row->previousworkus_yes.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '</tr>';
+			$page_content .= '</table>';
+
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+			$page_content .= '<span>Related to any employee of this organisation? If so, please give details<span>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" colspan=5>'; 	
+			$page_content .=  '<strong>'.$row->organisation.'<strong>';  
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			/*******************************************************************************************************************************/
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border-top:3px solid #304257; width:10%; background-color:#f6653c; color:#fff; text-transform:uppercase; text-align:center; height:30px" colspan = 6>';
+			$page_content .= '<h2>EMPLOYMENT</h2>';
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" colspan = 8>'; 	
+				$page_content .= '<table>';
+				
+				$page_content .= '<tr>';
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>If applicant offered this position, will he/she continue to work in any other capacity? </span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+				$page_content .= '<strong>'.$row->will_work_other.'</strong>';  
+				$page_content .= '</td>'; 
+				
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Would you work full time? </span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+				$page_content .=  '<strong>'.$row->fulltime_work .'</strong>';  
+				$page_content .= '</td>'; 
+				
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Preferred days/hours</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8">'; 	
+				$page_content .=  '<strong>'.$row->part_time_details.'</strong>';  
+				$page_content .= '</td>'; 
+				
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span> date would the applicant be available</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8">'; 	
+				$page_content .= '<strong>'. $row->date_available.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '</tr>';
+				
+				$page_content .= '</table>';
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">'; 	
+			$page_content .= '<span> Present Employment</span>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" colspan = 5>'; 	
+			$page_content .=  '<strong>'.$row->present_employment.'</strong>';  
+			$page_content .= '</td>';
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" colspan = 8>'; 	
+				$page_content .= '<table>';
+				
+				$page_content .= '<tr>';
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Employers name, address and nature of business</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" width="200">'; 	
+				$page_content .=  '<strong>'.$row->employer_details.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Position held</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+				$page_content .=  '<strong>'.$row->position_held.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Reason for leaving </span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" width="300" >'; 	
+				$page_content .=  '<strong>'.$row->reason_leaving.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Dates from and to</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8">'; 	
+				$page_content .=  '<strong>'.$row->emp_date_from.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '</tr>';
+				
+				$page_content .= '<tr>';
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Employers name, address and nature of business</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" width="200">'; 	
+				$page_content .=  '<strong>'.$row->employer_details_two.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Position held</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+				$page_content .=  '<strong>'.$row->position_held_two.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Reason for leaving </span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" width="300" >'; 	
+				$page_content .=  '<strong>'.$row->reason_leaving_two.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Dates from and to</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8">'; 	
+				$page_content .=  '<strong>'.$row->emp_date_from_two.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '</tr>';
+				
+				$page_content .= '<tr>';
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Employers name, address and nature of business</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" width="200">'; 	
+				$page_content .=  '<strong>'.$row->employer_details_thr.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Position held</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+				$page_content .=  '<strong>'.$row->position_held_thr.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Reason for leaving </span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" width="300" >'; 	
+				$page_content .=  '<strong>'.$row->reason_leaving_thr.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Dates from and to</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8">'; 	
+				$page_content .=  '<strong>'.$row->emp_date_from_thr.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '</tr>';
+				
+				$page_content .= '</table>';
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8" >';
+			$page_content .= '<span> Present Employment</span>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" colspan = 5>'; 	
+			$page_content .=  '<strong>'.$row->present_employment.'</strong>';  
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			$page_content .= '<tr>';
+			
+			$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+			$page_content .= '<span>Employers name, address and nature of business</span>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" colspan=3>'; 	
+			$page_content .=  '<strong>'.$row->employer_details.'</strong>';  
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+			$page_content .= '<span>Position held</span>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+			$page_content .=  '<strong>'.$row->position_held.'</strong>';  
+			$page_content .= '</td>'; 
+			
+			$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+			$page_content .= '<span>Reason for leaving </span>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+			$page_content .=  '<strong>'.$row->reason_leaving.'</strong>';  
+			$page_content .= '</td>'; 
+			
+			$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+			$page_content .= '<span>Dates from and to</span>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #e0e0d8">'; 	
+			$page_content .=  '<strong>'.$row->date_from.'</strong>';  
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+			$page_content .= '<span>STATEMENT IN SUPPORT OF APPLICATION</span>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" colspan=5>'; 	
+			$page_content .=  '<strong>'.$row->support_application;  
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			
+			
+			/*******************************************************************************************************************************/
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border-top:3px solid #304257; width:10%; background-color:#f6653c; color:#fff; text-transform:uppercase; text-align:center; height:30px" colspan = 6>';
+			$page_content .= '<h2>EDUCATIONAL BACKGROUND</h2>';
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" colspan = 8>'; 	
+				$page_content .= '<table>';
+				
+				$page_content .= '<tr>';
+				$page_content .= '<td style="border:1px solid #ccc; width:10%;  text-align:center" colspan = 8>';
+				$page_content .= '<p>(Proof of qualifications will be requested before appointment)</p> ';
+				$page_content .= '<p>Further & Higher Education (Degree, Diploma, BTEC, City & Guilds, NVQ or equivalent)</p> ';
+				$page_content .= '</td>'; 
+				$page_content .= '</tr>';
+				
+				$page_content .= '<tr>';
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Examination</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+				$page_content .=   '<strong>'.$row->he_examination.'</strong>';  
+				$page_content .= '</td>'; 
+				
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Level</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+				$page_content .=   '<strong>'.$row->he_level.'</strong>';  
+				$page_content .= '</td>'; 
+				
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Subjects</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8">'; 	
+				$page_content .=   '<strong>'.$row->he_subject.'</strong>';  
+				$page_content .= '</td>'; 
+
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Grade</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" colspan=5>'; 	
+				$page_content .=   '<strong>'.$row->he_grade.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '</tr>';
+				
+				
+				
+				$page_content .= '<tr>';
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Examination</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+				$page_content .=   '<strong>'.$row->he_examination_tw.'</strong>';  
+				$page_content .= '</td>'; 
+				
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Level</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+				$page_content .=   '<strong>'.$row->he_level_tw.'</strong>';  
+				$page_content .= '</td>'; 
+				
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Subjects</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8">'; 	
+				$page_content .=   '<strong>'.$row->he_subject_tw.'</strong>';  
+				$page_content .= '</td>'; 
+
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Grade</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" colspan=5>'; 	
+				$page_content .=   '<strong>'.$row->he_grade_tw.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '</tr>';
+
+				$page_content .= '</table>';
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" colspan = 8>'; 	
+				$page_content .= '<table>';
+			
+				$page_content .= '<tr>';
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Name and Location of College or University</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+				$page_content .=   '<strong>'.$row->u_namelocation.'</strong>';  
+				$page_content .= '</td>'; 
+				
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Qualification Gained</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+				$page_content .=   '<strong>'.$row->u_qualification.'</strong>';  
+				$page_content .= '</td>'; 
+				
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Grade</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8">'; 	
+				$page_content .=   '<strong>'.$row->u_grade.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '</tr>';
+				
+				$page_content .= '<tr>';
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Name and Location of College or University</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+				$page_content .=   '<strong>'.$row->u_namelocation_tw.'</strong>';  
+				$page_content .= '</td>'; 
+				
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Qualification Gained</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+				$page_content .=   '<strong>'.$row->u_qualification_tw.'</strong>';  
+				$page_content .= '</td>'; 
+				
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>Grade</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8">'; 	
+				$page_content .=   '<strong>'.$row->u_grade_tw.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '</tr>';
+				
+				$page_content .= '</table>';
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border:1px solid #ccc; width:10%;  text-align:center" colspan = 6>';
+			$page_content .= '<span>Professional qualifications and membership of professional organisations Please list</span> ';
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+			$page_content .= '<span>List</span>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" colspan=5>'; 	
+			$page_content .=  '<strong>'.$row->professional_qual.'</strong>';  
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			/*******************************************************************************************************************************/
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border-top:3px solid #304257; width:10%; background-color:#f6653c; color:#fff; text-transform:uppercase; text-align:center; height:30px" colspan = 6>';
+			$page_content .= '<h2>miscellanous</h2>';
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" colspan = 8>'; 	
+				$page_content .= '<table>';
+
+				$page_content .= '<tr>';
+				$page_content .= '<td style="border:1px solid #ccc; width:20%; background-color:#e0e0d8" colspan="2">';
+				$page_content .= '<span>Have the applicant  ever been convicted by the courts or cautioned, reprimanded or given a final warning by police?</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+				$page_content .=  '<strong>'.$row->conviction.'</strong>';  
+				$page_content .= '</td>'; 
+				
+				$page_content .= '<td style="border:1px solid #ccc;  background-color:#e0e0d8" >';
+				$page_content .= '<span>If yes,  details of offences, penalties and dates</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" colspan="5">'; 	
+				$page_content .=  '<strong>'.$row->conviction_details.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '</tr>';
+				
+				$page_content .= '<tr>';
+				$page_content .= '<td style="border:1px solid #ccc;  background-color:#e0e0d8" colspan="2">';
+				$page_content .= '<span>Have the client ever been subject to disciplinary action in your current or previous employment</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+				$page_content .=  '<strong>'.$row->disciplinary_actions.'</strong>';  
+				$page_content .= '</td>'; 
+				
+				$page_content .= '<td style="border:1px solid #ccc; width:20%; background-color:#e0e0d8">';
+				$page_content .= '<span>If yes,  details including outcome and relevant dates</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" colspan="5">'; 	
+				$page_content .=  '<strong>'.$row->disciplinary_details.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '</tr>';
+				
+				$page_content .= '<tr>';
+				$page_content .= '<td style="border:1px solid #ccc;  width:20%; background-color:#e0e0d8" colspan="2">';
+				$page_content .= '<span>Are the applicant  the subject of any ongoing investigations or disciplinary action</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+				$page_content .=  '<strong>'.$row->ongoing_investigation.'</strong>';  
+				$page_content .= '</td>'; 
+				
+				$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+				$page_content .= '<span>If yes,  details including outcome and relevant dates</span>'; 	 
+				$page_content .= '</td>';
+				$page_content .= '<td style="border:1px solid #e0e0d8" colspan="5">'; 	
+				$page_content .=  '<strong>'.$row->ongoing_investigation_details.'</strong>';  
+				$page_content .= '</td>'; 
+				$page_content .= '</tr>';
+				
+				$page_content .= '</table>';
+				$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border:1px solid #ccc; width:10%;  text-align:center" colspan = 6>';
+			$page_content .= '<p>REFERENCES</p> ';
+			$page_content .= '<p>Please give details of two employment referees from your two most recent employers, one of whom must be your current employer, if applicable. If you have not held a position of paid employment, you may give details of a referee from any unpaid or voluntary work undertaken or any period of study.</p> ';
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+			$page_content .= '<span>Name</span>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" colspan="6">'; 	
+			$page_content .=  '<strong>'.$row->reference1_name.'</strong>';  
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+			$page_content .= '<span>Occupation</span>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+			$page_content .=  '<strong>'.$row->reference1_occupation.'</strong>';  
+			$page_content .= '</td>'; 
+			
+			$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+			$page_content .= '<span>Telephone Number</span>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+			$page_content .=  '<strong>'.$row->reference1_telno.'</strong>';  
+			$page_content .= '</td>'; 
+			
+			$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+			$page_content .= '<span>Email</span>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #e0e0d8">'; 	
+			$page_content .=  '<strong>'.$row->reference1_email.'</strong>';  
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+			$page_content .= '<span>Address</span>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" colspan="6">'; 	
+			$page_content .=  '<strong>'.$row->reference1_address.'</strong>';  
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+			$page_content .= '<span>Name</span>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" colspan="6">'; 	
+			$page_content .=  '<strong>'.$row->reference2_name.'</strong>';  
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+			$page_content .= '<span>Occupation</span>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+			$page_content .=  '<strong>'.$row->reference2_occupation.'</strong>';  
+			$page_content .= '</td>'; 
+			
+			$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+			$page_content .= '<span>Telephone Number</span>>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" >'; 	
+			$page_content .=  '<strong>'.$row->reference2_telno.'</strong>';  
+			$page_content .= '</td>'; 
+			
+			$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+			$page_content .= '<span>Email</span>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #e0e0d8">'; 	
+			$page_content .=  '<strong>'.$row->reference2_email.'</strong>';  
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>'; 
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+			$page_content .= '<span>Address</span>'; 	 
+			$page_content .= '</td>';
+			$page_content .= '<td style="border:1px solid #e0e0d8" colspan="6">'; 	
+			$page_content .=  '<strong>'.$row->reference2_address.'</strong>';  
+			$page_content .= '</td>'; 
+			$page_content .= '</tr>';
+			
+			$page_content .= '<tr>';
+			$page_content .= '<td style="border:1px solid #ccc; width:10%; background-color:#e0e0d8">';
+			$page_content .= '<span>Uploaded File</span>'; 	 
+			$page_content .= '</td>';
+			
+			$page_content .= '<td style="border:1px solid #e0e0d8" colspan="6">';  //***GET THE FILE ATTACHMENT LINK WITH THE USERS TABLE
+			
+			$applicantemail = $row->email_add; //GET THE EMAIL ADDRESS
+			
+			$qumail = db_query('SELECT * FROM {users} WHERE mail = :mail', array(':mail' => $applicantemail ));
+			foreach($qumail as $skey1){
+				$skey = $skey1->uid;
+			}
+			
+			$qumailfid = db_query('SELECT * FROM {file_usage} WHERE id = :id', array(':id' => $skey ));
+			foreach($qumailfid as $skeyfileid){
+				$skeyfid = $skeyfileid->fid;
+			}
+			
+			
+			$query = db_select('file_usage', 'fu');
+						$query->condition('fu.module', 'file', '=');
+						$query->condition('fu.id', $skey, '=');
+						$query->fields('fu');
+						$qwf = $query->execute();
+			
+			//print_r($qw);
+			
+			foreach ($qwf as $row1f){
+				//print_r($row1f);
+				$fid_xf = $row1f->fid;
+			}
+			
+			//echo $fid_xf;
+			
+			$qumailfile = db_query('SELECT * FROM {file_managed} WHERE fid = :fid', array(':fid' => $fid_xf ));
+			foreach($qumailfile as $skeyfile){
+				$skeyfilename = $skeyfile->filename;
+			}
+
+			
+			$page_content .= '<a href=" '.base_path().'sites/default/resume/'.$skeyfilename.' " > '.$skeyfilename  .'</a><br/>';
+		$page_content .= '</td>';  //***END GET THE FILE ATTACHMENT LINK WITH THE USERS TABLE
+			
+			
+			
+			
+			$page_content .= '</tr>';
+			
+			
+		$page_content .= '</table>'; 	
+	}
+	return $page_content;
+}
+	
+//**********************************************************************************************************************************//
+//APPLICATION FORM
+//**********************************************************************************************************************************//	
+
+
+
+
+function application_form_form_validate($form, &$form_state) {
+  $valid_email = $form_state['values']['email'];
+  if (!valid_email_address($valid_email)) {
+	form_set_error('email', 'Your email address -- ' . $valid_email . ' -- appears malformed');
+  }
+}
+
+function application_form_form($form,&$form_submit) {
+	
+	$form['post'] = array(
+		'#type' => 'fieldset',
+		'#collapsible' => FALSE,
+		'#collapsed' => FALSE,
+		'#prefix' => '<div id="tab-1" class="tab-content">',
+		'#suffix' => '</div>',
+	 );
+  
+	//GET THE JOBPOSITION AND LOCATION
+	$actual_link = $_GET['jb'];
+	//$actual_link1 = $_GET['#'];
+	//echo $actual_link1;
+	
+    //$actual_link = "http://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
+	$exploded_url = explode( "/", $actual_link ); 
+	$location = $exploded_url[1];
+	$post = $exploded_url[0];
+	$location = $exploded_url[1];
+	$post = str_replace("%20"," ",$post);
+	$location = str_replace("%20"," ",$location);
+	
+	$max_length = 200; 
+
+	  $form['post'] ['applicationforthepostof'] = array(
+			'#title' => t('Application for the post of:'),
+			'#type' => 'textfield',
+			'#required' => TRUE,	
+			 '#value' => $post,
+			 '#attributes' => array('readonly' => 'readonly'),
+	  );
+  
+  
+	$form['post']['locationofpost'] = array(
+		'#title' => t('Location of Post:'),
+		'#type' => 'textfield',
+		 '#value' => $location,
+		 '#attributes' => array('readonly' => 'readonly'),
+	);
+	
+
+	 $form['post'] ['references_j'] = array(
+		'#markup' => '<span class="note"><p>Please procees to next Step, Field marked with ( * ) are required</p></span>',
+		'#prefix' => '<div id="rnote">',
+		'#suffix' => '</div>',
+	);
+
+	  //**********************PERSONAL INFORMATION ***************************//
+  
+   $form['pinfo'] = array(
+		'#type' => 'fieldset',
+		'#collapsible' => FALSE,
+		'#collapsed' => FALSE,
+		'#prefix' => '<div id="tab-2" class="tab-content">',
+		'#suffix' => '</div>',
+	
+	);
+  
+	$form ['pinfo'] ['Surname'] = array(
+		'#title' => t('Surname'),
+		'#type' => 'textfield',
+	 '#required' => TRUE,		
+		'#prefix' => '<div id="applicationf">',
+		'#suffix' => '</div>',
+	);
+  
+	$form ['pinfo'] ['forename'] = array(
+		'#title' => t('Forename'),
+		 '#required' => TRUE,	
+		'#type' => 'textfield',
+		'#prefix' => '<div id="applicationf">',
+		'#suffix' => '</div>',
+	);
+	
+	
+	$form['pinfo'] ['selected_title'] = array(
+       '#type' => 'select',
+       '#title' => t('Title'),
+       '#options' => array(
+          Ms => t('Ms'),
+          Miss => t('Miss'),
+		  Mrs => t('Mrs'),
+          Mr => t('Mr'),
+		  Master => t('Master'),
+          Rev => t('Rev'),
+		  Dr => t('Dr'),
+       ),
+       '#default_value' => $category['selected'],
+       '#prefix' => '<div id="applicationf">',
+	   '#suffix' => '</div>',
+   );
+	
+
+	$form ['pinfo'] ['email'] = array(
+		'#title' => t('Email'),
+		'#required' => TRUE,	
+		'#type' => 'textfield',
+		'#prefix' => '<div id="applicationf" onmouseover = "myOverFunction()" onmouseout ="myoutFunction()">',
+		'#suffix' => '</div>',
+	);
+  
+  
+   $form ['pinfo'] ['address'] = array(
+    '#title' => t('Address'),
+	 '#required' => TRUE,	
+    '#type' => 'textarea',   
+	'#attributes'=>array('onKeyPress'=>"return(this.value.length<$max_length);"),
+	'#description' => t('Limit to 200 character'),
+  );
+  
+  $form ['pinfo'] ['hometel'] = array(
+    '#title' => t('Home Telephone No.'),
+    '#type' => 'textfield',
+	'#prefix' => '<div id="applicationf">',
+    '#suffix' => '</div>',
+  );
+  
+  $form ['pinfo'] ['mobilephone'] = array(
+    '#title' => t('Mobile Phone No.'),
+    '#type' => 'textfield',
+	 '#required' => TRUE,	
+	'#prefix' => '<div id="applicationf">',
+    '#suffix' => '</div>',
+  );
+  
+  $form['pinfo'] ['wheredidyouhearus'] = array(
+       '#type' => 'select',
+       '#title' => t('Where did you hear about the Jeesal Group? Please tick all those that apply'),
+       '#options' => array(
+          Newspaper => t('Newspaper'),
+          Radio => t('Radio'),
+		  FamilyMemberFriend => t('Family Member/Friend'),
+          Internet => t('Internet'),
+		  Other => t('Other'),
+       ),
+       '#default_value' => $category['selected'],
+       '#prefix' => '<div id="applicationf2">',
+	   '#suffix' => '</div>',
+   );
+  
+    $form ['pinfo'] ['recommend'] = array(
+		'#title' => t('Were you recommended by anyone who works at the Jeesal Group? 
+		If yes please give details of name, job role and location of where employed.'),
+		'#description' => t('Limit to 200 character'),
+		'#type' => 'textarea',
+		'#attributes'=>array('onKeyPress'=>"return(this.value.length<$max_length);"),
+		'#prefix' => '<div id="applicationw">',
+		'#suffix' => '</div>',
+	);
+ 
+   
+	 $form['pinfo'] ['references_j'] = array(
+		'#markup' => '<span class=""><p>Please note to enable us to comply with our obligations under the Immigration, Asylum and Nationality Act 2006, you will be asked to provide written proof of your right to work in the United Kingdom, before any job offer is made to you. You will be given details of the original document or documents which are required at the appropriate time.</p></span>',
+		'#prefix' => '<div id="rnote">',
+		'#suffix' => '</div>',
+	);
+
+  $form ['pinfo'] ['currend_driverslicense'] = array(
+    '#title' => t('Do you have a full current driving licence?'),
+    '#type' => 'radios',
+	 '#required' => TRUE,	
+	 '#options' => drupal_map_assoc(array(t('YES '), t('NO'))),
+	'#prefix' => '<div id="driverslicense">',
+    '#suffix' => '</div>',
+  );
+  
+  $form ['pinfo'] ['free_endorsement'] = array(
+    '#title' => t('Is it free of endorsements?'),
+    '#type' => 'radios',
+	 '#required' => TRUE,	
+	 '#options' => drupal_map_assoc(array(t('YES '), t('NO'))),
+	'#prefix' => '<div id="driverslicense">',
+    '#suffix' => '</div>',
+  );
+  
+   $form ['pinfo'] ['free_endorsement_no_details'] = array(
+    '#title' => t('If NO, give details.'),
+    '#type' => 'textarea',
+	'#attributes'=>array('onKeyPress'=>"return(this.value.length<$max_length);"),
+	'#description' => t('Limit to 200 character'),
+	'#prefix' => '<div id="applicationw">',
+    '#suffix' => '</div>',
+  );
+  
+    $form ['pinfo'] ['meansoftransport'] = array(
+    '#title' => t('Do you have your own means of transport?'),
+    '#type' => 'radios',
+	 '#required' => TRUE,	
+	 '#options' => drupal_map_assoc(array(t('YES '), t('NO'))),
+	'#prefix' => '<div id="driverslicense">',
+    '#suffix' => '</div>',
+  );
+  
+  $form ['pinfo'] ['preparedtodrivepatient'] = array(
+    '#title' => t('Would you be prepared to drive patients/tenants/service users offsite in company vehicles?'),
+    '#type' => 'radios',
+	 '#required' => TRUE,	
+	 '#options' => drupal_map_assoc(array(t('YES '), t('NO'))),
+	'#prefix' => '<div id="driverslicense">',
+    '#suffix' => '</div>',
+  );
+  
+   $form ['pinfo'] ['preparedtodrivepatient_no'] = array(
+    '#title' => t('If NO, give details.'),
+    '#type' => 'textarea',
+	'#attributes'=>array('onKeyPress'=>"return(this.value.length<$max_length);"),
+	'#description' => t('Limit to 200 character'),
+	'#prefix' => '<div id="applicationw">',
+    '#suffix' => '</div>',
+  );
+  
+  $form ['pinfo'] ['nationalinsuranceno'] = array(
+    '#title' => t('National insurance no:'),
+    '#type' => 'textfield',
+     '#required' => TRUE,	
+	'#prefix' => '<div id="applicationf">',
+    '#suffix' => '</div>',
+  );
+  
+  $form ['pinfo'] ['previousworkus'] = array(
+    '#title' => t('Have you previously worked for us?'),
+    '#type' => 'radios',
+	 '#required' => TRUE,	
+	 '#options' => drupal_map_assoc(array(t('YES '), t('NO'))),
+	'#prefix' => '<div id="driverslicense">',
+    '#suffix' => '</div>',
+  );
+  
+   $form ['pinfo'] ['previousworkus_yes'] = array(
+    '#title' => t(' If yes, when and in what capacity.'),
+    '#type' => 'textarea',
+	'#attributes'=>array('onKeyPress'=>"return(this.value.length<$max_length);"),
+	'#description' => t('Limit to 200 character'),
+	'#prefix' => '<div id="applicationw">',
+    '#suffix' => '</div>',
+  );
+  
+    $form ['pinfo'] ['organisation'] = array(
+    '#title' => t(' Are you related to any employee of this organisation? If so, please give details.'),
+    '#type' => 'textarea',
+	'#attributes'=>array('onKeyPress'=>"return(this.value.length<$max_length);"),
+	'#description' => t('Limit to 200 character'),
+	 '#required' => TRUE,	
+	'#prefix' => '<div id="applicationw">',
+    '#suffix' => '</div>',
+  );
+
+  
+  //**********************EMPLOYMENT ***************************//
+  
+    $form['employment'] = array(
+    '#type' => 'fieldset',
+    '#collapsible' => FALSE,
+    '#collapsed' => FALSE,
+	'#prefix' => '<div id="tab-3" class="tab-content">',
+    '#suffix' => '</div>',
+  );
+  
+  
+  $form ['employment'] ['will_work_other'] = array(
+    '#title' => t('If offered this position, will you continue to work in any other capacity?'),
+    '#type' => 'radios',
+	 '#required' => TRUE,	
+	 '#options' => drupal_map_assoc(array(t('YES '), t('NO'))),
+	'#prefix' => '<div id="driverslicense">',
+    '#suffix' => '</div>',
+  );
+  
+  
+  $form ['employment'] ['fulltime_work'] = array(
+    '#title' => t('Would you work full time?'),
+	 '#required' => TRUE,	
+    '#type' => 'radios',
+	 '#options' => drupal_map_assoc(array(t('YES '), t('NO'))),
+	'#prefix' => '<div id="driverslicense">',
+    '#suffix' => '</div>',
+  );
+  
+  
+   $form ['employment'] ['part_time_details'] = array(
+    '#title' => t('If your application is for part time employment, please state days/hours preferred.'),
+    '#type' => 'textarea',
+	'#attributes'=>array('onKeyPress'=>"return(this.value.length<$max_length);"),
+	'#description' => t('Limit to 200 character'),
+	'#prefix' => '<div id="applicationw">',
+    '#suffix' => '</div>',
+  );
+  
+
+  $form ['employment'] ['date_available'] = array(
+		
+		'#type' => 'date_popup',
+		'#title' => t('On what date would you be available to commence this employment?'),
+		'#default_value' => variable_get('idcards_youth_expiration_date', 'now'),
+		'#date_format' => 'd/m/Y',
+		'#date_label_position' => 'within',
+		 '#required' => TRUE,	
+		'#date_timezone' => 'America/Chicago',
+		'#date_increment' => 15,
+		'#date_year_range' => '0:+8',	
+		'#prefix' => '<div id="empq4">',
+		'#suffix' => '</div>',
+	);
+  
+  
+  $form ['employment'] ['present_employment'] = array(
+	
+    '#title' => t('Present Employment'),
+	'#description' => t('Please provide Name and address of current employer, Nature of business, Post Held, Date appointed, Current salary, (please be aware that we may ask you to provide a recent payslip as evidence of your current salary) Notice period required, Reason for leaving and Brief description of duties and responsibilities'),
+    '#type' => 'textarea',
+	'#attributes'=>array('onKeyPress'=>"return(this.value.length<$max_length);"),
+	'#description' => t('Limit to 200 character'),
+	 '#required' => TRUE,	
+	'#prefix' => '<div id="empq5">',
+    '#suffix' => '</div>',
+  );
+  
+
+  $form ['employment'] ['employer_details'] = array(
+    '#title' => t('Employers name, address and nature of business'),
+    '#type' => 'textfield',
+	'#prefix' => '<div id="emph">',
+    '#suffix' => '</div>',
+  );
+  
+  $form ['employment'] ['position_held'] = array(
+    '#title' => t('Position held'),
+    '#type' => 'textfield',
+	'#prefix' => '<div id="emph1">',
+    '#suffix' => '</div>',
+  );
+  
+   $form ['employment'] ['reason_leaving'] = array(
+    '#title' => t('Reason for leaving'),
+    '#type' => 'textfield',
+	'#prefix' => '<div id="emph2">',
+    '#suffix' => '</div>',
+  );
+  
+   $form ['employment'] ['emp_date_from'] = array(
+    '#title' => t('Dates from'),
+    '#type' => 'date_popup',
+	'#date_format' => 'd/m/Y',
+	'#date_timezone' => 'America/Chicago',
+	'#date_increment' => 15,
+	'#date_year_range' => '0:+8',
+	'#prefix' => '<div id="emph3">',
+    '#suffix' => '</div>',
+  );
+  
+   $form ['employment'] ['employer_details_tw'] = array(
+    '#type' => 'textfield',
+	'#prefix' => '<div id="emph">',
+    '#suffix' => '</div>',
+  );
+  
+  $form ['employment'] ['position_held_tw'] = array(
+    '#type' => 'textfield',
+	'#prefix' => '<div id="emph1">',
+    '#suffix' => '</div>',
+  );
+  
+   $form ['employment'] ['reason_leaving_tw'] = array(
+    '#type' => 'textfield',
+	'#prefix' => '<div id="emph2">',
+    '#suffix' => '</div>',
+  );
+  
+   $form ['employment'] ['emp_date_from_tw'] = array(
+    '#type' => 'date_popup',
+	'#date_format' => 'm/d/Y',
+	'#date_timezone' => 'America/Chicago',
+	'#date_increment' => 15,
+	'#date_year_range' => '0:+8',
+	'#prefix' => '<div id="emph3">',
+    '#suffix' => '</div>',
+  );
+  
+    $form ['employment'] ['employer_details_th'] = array(
+    '#type' => 'textfield',
+	'#prefix' => '<div id="emph">',
+    '#suffix' => '</div>',
+  );
+  
+  $form ['employment'] ['position_held_th'] = array(
+    '#type' => 'textfield',
+	'#prefix' => '<div id="emph1">',
+    '#suffix' => '</div>',
+  );
+  
+   $form ['employment'] ['reason_leaving_th'] = array(
+    '#type' => 'textfield',
+	'#prefix' => '<div id="emph2">',
+    '#suffix' => '</div>',
+  );
+  
+   $form ['employment'] ['emp_date_from_th'] = array(
+    '#type' => 'date_popup',
+	'#date_format' => 'm/d/Y',
+	'#date_timezone' => 'America/Chicago',
+	'#date_increment' => 15,
+	'#date_year_range' => '0:+8',
+	'#prefix' => '<div id="emph3">',
+    '#suffix' => '</div>',
+  );
+
+  
+   $form['employment'] ['container'] = array(
+		'#prefix' => '<div class="empcontainercontainer">',
+		'#suffix' => '</div>',
+	);
+  
+  
+	$form['employment'] ['status'] = array(
+		'#markup' => '<h4>Statement in Support of Application</h4>',
+		'#prefix' => '<div id="status_emp">',
+		'#suffix' => '</div>',
+	);
+	 $empmax_length = 2000; 
+	 $form ['employment'] ['support_application'] = array(
+		'#description' => t('Limit to 2000 character'),
+		 '#title' => t('Provide details of your knowledge, skills and experience, together with your reasons for applying'),
+		'#type' => 'textarea',
+		'#wysiwyg' => false,
+		'#prefix' => '<div id="empq6">',
+		'#suffix' => '</div>',
+		'#attributes'=>array('onKeyPress'=>"return(this.value.length<$empmax_length);")
+	  );
+
+	//********************************EDUCATION*****************//
+ 
+  $form['education'] = array(
+    '#type' => 'fieldset',
+	'#description' => '(Proof of qualifications will be requested before appointment)',
+    '#collapsible' => FALSE,
+    '#collapsed' => FALSE,
+	'#prefix' => '<div id="tab-4" class="tab-content">',
+    '#suffix' => '</div>',
+  );
+  
+	$form['education'] ['status'] = array(
+		'#markup' => '<p> Secondary Education: (GCE O Level / A levels/ GCSE / or equivalent)</p>',
+	);
+	
+  $form ['education'] ['he_examination'] = array(
+    '#title' => t('Examination'),
+    '#type' => 'textfield',
+	'#prefix' => '<div id="dynamicInput">',
+    '#suffix' => '</div>',
+  );
+  
+  $form ['education'] ['he_level'] = array(
+    '#title' => t('Level'),
+    '#type' => 'textfield',
+	'#prefix' => '<div id="level">',
+    '#suffix' => '</div>',
+  );
+  
+   $form ['education'] ['he_subject'] = array(
+    '#title' => t('Subjects'),
+    '#type' => 'textfield',
+	'#prefix' => '<div id="subjects">',
+    '#suffix' => '</div>',
+  );
+  
+   $form ['education'] ['he_grade'] = array(
+    '#title' => t('Grade'),
+    '#type' => 'textfield',
+	'#prefix' => '<div id="grade">',
+    '#suffix' => '</div>',
+  );
+  
+  
+   $form ['education'] ['he_examination_tw'] = array(
+    '#type' => 'textfield',
+	'#prefix' => '<div id="dynamicInput">',
+    '#suffix' => '</div>',
+  );
+  
+  $form ['education'] ['he_level_tw'] = array(
+    '#type' => 'textfield',
+	'#prefix' => '<div id="level">',
+    '#suffix' => '</div>',
+  );
+  
+   $form ['education'] ['he_subject_tw'] = array(
+    '#type' => 'textfield',
+	'#prefix' => '<div id="subjects">',
+    '#suffix' => '</div>',
+  );
+  
+   $form ['education'] ['he_grade_tw'] = array(
+    '#type' => 'textfield',
+	'#prefix' => '<div id="grade">',
+    '#suffix' => '</div>',
+  );
+  
+
+   $form['education'] ['container'] = array(
+		'#prefix' => '<div class="educcontainercontainer">',
+		'#suffix' => '</div>',
+	);
+
+  $form['education'] ['status'] = array(
+		'#markup' => '<p> Further & Higher Education (Degree, Diploma, BTEC, City & Guilds, NVQ or equivalent) </p>',
+	);
+  
+    
+  $form ['education'] ['u_namelocation'] = array(
+    '#title' => t('Name and Location of College or University'),
+    '#type' => 'textfield',
+	'#prefix' => '<div id="university">',
+    '#suffix' => '</div>',
+  );
+  
+   $form ['education'] ['u_qualification'] = array(
+    '#title' => t('Qualification Gained'),
+    '#type' => 'textfield',
+	'#prefix' => '<div id="qualification_u">',
+    '#suffix' => '</div>',
+  );
+  
+   $form ['education'] ['u_grade'] = array(
+    '#title' => t('Grade'),
+    '#type' => 'textfield',
+	'#prefix' => '<div id="grade2">',
+    '#suffix' => '</div>',
+  );
+
+  
+  $form ['education'] ['u_namelocation_tw'] = array(
+    '#type' => 'textfield',
+	'#prefix' => '<div id="university">',
+    '#suffix' => '</div>',
+  );
+  
+   $form ['education'] ['u_qualification_tw'] = array(
+    '#type' => 'textfield',
+	'#prefix' => '<div id="qualification_u">',
+    '#suffix' => '</div>',
+  );
+  
+   $form ['education'] ['u_grade_tw'] = array(
+    '#type' => 'textfield',
+	'#prefix' => '<div id="grade2">',
+    '#suffix' => '</div>',
+  );
+  
+   $form['education'] ['container2'] = array(
+		'#prefix' => '<div class="universityqual_container">',
+		'#suffix' => '</div>',
+	);
+
+   $form ['education'] ['professional_qual'] = array(
+    '#title' => t('Professional qualifications and membership of professional organisations Please list:'),
+    '#type' => 'textarea',
+	'#attributes'=>array('onKeyPress'=>"return(this.value.length<$max_length);"),
+	'#description' => t('Limit to 200 character'),
+	'#prefix' => '<div id="profqual">',
+    '#suffix' => '</div>',
+  );
+  
+
+  //******************************MISCELLANOUS************************//
+  
+   $form['miscellanous'] = array(
+		'#type' => 'fieldset',
+		'#collapsible' => FALSE,
+		'#collapsed' => FALSE,
+		'#prefix' => '<div id="tab-5" class="tab-content">',
+		'#suffix' => '</div>',
+	 );
+	 
+	$form['miscellanous'] ['status'] = array(
+		'#markup' => '<p>Because of the nature of work for which you are applying, this post is exempt from any provision of the Rehabilitation of Offenders Act 1974. Applicants are therefore not entitled to withhold information about convictions, cautions, reprimands and final warnings which for other purposes are spent under the provisions of the Act, and, in the event of employment, any failure to disclose such convictions could result in dismissal or disciplinary action. Disclosure need not necessarily be a bar to obtaining a position with the organisation. If you declare you have a criminal record we will discuss this at interview.
+	</p>',
+	);
+	
+	
+	 $form ['miscellanous'] ['conviction'] = array(
+		'#title' => t('Have you ever been convicted by the courts or cautioned, reprimanded or given a final warning by police?'),
+		 '#required' => TRUE,	
+		'#type' => 'radios',
+		 '#options' => drupal_map_assoc(array(t('YES '), t('NO'))),
+		'#prefix' => '<div id="driverslicense">',
+		'#suffix' => '</div>',
+	  );
+	  
+	 $form ['miscellanous'] ['conviction_details'] = array(
+		'#title' => t('If yes, please give details of offences, penalties and dates:'),
+		'#type' => 'textarea',
+		'#prefix' => '<div id="applicationw">',
+		'#suffix' => '</div>',
+	  );
+	  
+	  
+	 $form ['miscellanous'] ['disciplinary_actions'] = array(
+		'#title' => t('Have you ever been subject to disciplinary action in your current or previous employment?'),
+		 '#required' => TRUE,	
+		'#type' => 'radios',
+		 '#options' => drupal_map_assoc(array(t('YES '), t('NO'))),
+		'#prefix' => '<div id="driverslicense">',
+		'#suffix' => '</div>',
+	  );
+	  
+	 $form ['miscellanous'] ['disciplinary_details'] = array(
+		'#title' => t('If yes, please give details including outcome and relevant dates:'),
+		'#type' => 'textarea',
+		'#attributes'=>array('onKeyPress'=>"return(this.value.length<$max_length);"),
+		'#description' => t('Limit to 200 character'),
+		'#prefix' => '<div id="applicationw">',
+		'#suffix' => '</div>',
+	  );
+	  
+	   $form ['miscellanous'] ['ongoing_investigation'] = array(
+		'#title' => t('Are you the subject of any ongoing investigations or disciplinary action?'),
+		 '#required' => TRUE,	
+		'#type' => 'radios',
+		 '#options' => drupal_map_assoc(array(t('YES '), t('NO'))),
+		'#prefix' => '<div id="driverslicense">',
+		'#suffix' => '</div>',
+	  );
+	  
+	 $form ['miscellanous'] ['ongoing_investigation_details'] = array(
+		'#title' => t('If yes, please give details:'),
+		'#type' => 'textarea',
+		'#attributes'=>array('onKeyPress'=>"return(this.value.length<$max_length);"),
+		'#description' => t('Limit to 200 character'),
+		'#prefix' => '<div id="applicationw">',
+		'#suffix' => '</div>',
+	  );
+	  
+	    $form['miscellanous'] ['referencest'] = array(
+		'#markup' => 'References',
+	);
+	  
+	  $form['miscellanous'] ['references'] = array(
+		'#markup' => '<p>Please give details of two employment referees from your two most recent employers, one of whom must be your current employer, if applicable. If you have not held a position of paid employment, you may give details of a referee from any unpaid or voluntary work undertaken or any period of study.	</p>',
+	);
+	
+	$form ['miscellanous'] ['reference1_name'] = array(
+		'#title' => t('Name'),
+		'#type' => 'textfield',
+		 '#required' => TRUE,	
+		'#prefix' => '<div id="reference_fields">',
+		'#suffix' => '</div>',
+	  );
+	  
+	  $form ['miscellanous'] ['reference1_occupation'] = array(
+		'#title' => t('Occupation'),
+		'#type' => 'textfield',
+		 '#required' => TRUE,	
+		'#prefix' => '<div id="reference_fields">',
+		'#suffix' => '</div>',
+	  );
+	  
+	 $form ['miscellanous'] ['reference1_telno'] = array(
+		'#title' => t('Telephone Number'),
+		'#type' => 'textfield',
+		 '#required' => TRUE,	
+		'#prefix' => '<div id="reference_fields">',
+		'#suffix' => '</div>',
+	  );
+	  
+	  
+	 $form ['miscellanous'] ['reference1_email'] = array(
+		'#title' => t('Email:'),
+		'#type' => 'textfield',
+		 '#required' => TRUE,	
+		'#prefix' => '<div id="reference_fields">',
+		'#suffix' => '</div>',
+	  );
+	  
+	  
+	 $form ['miscellanous'] ['reference1_address'] = array(
+		'#title' => t('Address:'),
+		'#type' => 'textarea',
+		'#attributes'=>array('onKeyPress'=>"return(this.value.length<$max_length);"),
+		'#description' => t('Limit to 200 character'),
+		 '#required' => TRUE,	
+		'#prefix' => '<div id="raddress">',
+		'#suffix' => '</div>',
+	 );
+	
+	$form ['miscellanous'] ['reference2_name'] = array(
+		'#title' => t('Name'),
+		'#type' => 'textfield',
+		 '#required' => TRUE,	
+		'#prefix' => '<div id="reference_fields">',
+		'#suffix' => '</div>',
+	  );
+	  
+	  $form ['miscellanous'] ['reference2_occupation'] = array(
+		'#title' => t('Occupation'),
+		'#type' => 'textfield',
+		 '#required' => TRUE,	
+		'#prefix' => '<div id="reference_fields">',
+		'#suffix' => '</div>',
+	  );
+	  
+	 $form ['miscellanous'] ['reference2_telno'] = array(
+		'#title' => t('Telephone Number'),
+		'#type' => 'textfield',
+		 '#required' => TRUE,	
+		'#prefix' => '<div id="reference_fields">',
+		'#suffix' => '</div>',
+	  );
+	  
+	  
+	 $form ['miscellanous'] ['reference2_email'] = array(
+		'#title' => t('Email:'),
+		'#type' => 'textfield',
+		 '#required' => TRUE,	
+		'#prefix' => '<div id="reference_fields">',
+		'#suffix' => '</div>',
+	  );
+	  
+	  
+	 $form ['miscellanous'] ['reference2_address'] = array(
+		'#title' => t('Address:'),
+		'#type' => 'textarea',
+		'#attributes'=>array('onKeyPress'=>"return(this.value.length<$max_length);"),
+		'#description' => t('Limit to 200 character'),
+		 '#required' => TRUE,	
+		'#prefix' => '<div id="raddress">',
+		'#suffix' => '</div>',
+	 );
+	 
+	 
+
+	 $form['miscellanous'] ['references_j'] = array(
+		'#markup' => '<p>Please note: Referees will be contacted following an offer of employment. Reference forms received from referees will be treated as confidential and will only be disclosed if the third party consents or the recipient decides the benefit of disclosure outweighs the duty of confidentiality</p>',
+		'#prefix' => '<div id="rnote">',
+		'#suffix' => '</div>',
+	);
+
+	 $form['miscellanous'] ['declarations '] = array(
+		'#markup' => '
+		<h2>declarations and authorisation </h2>
+		<p>I declare that the information given by me, to the best of my knowledge, is true and complete.</p>
+		<p>I acknowledge that dishonesty or the giving of incorrect information on purpose may render this application and any subsequent employment invalid and subject to summary termination.</p>
+		<p>In accordance with the Data Protection Act 1998, I hereby authorise Jeesal Group to process the information contained within this application form for recruitment and selection purposes.</p>',
+		'#prefix' => '<div id="rnote">',
+		'#suffix' => '</div>',
+	);
+	
+	
+
+
+  $form['miscellanous'] ['submit'] = array(
+    '#value' => 'Submit',
+    '#type' => 'submit',
+	'#prefix' => '<div class="submitb">',
+    '#suffix' => '</div>',
+    );
+	
+	
+  return $form;
+}
+
+function application_form_form_submit($form_id, $form_values) {
+
+//$time = date('mdygis');
+//$dir = variable_get('file_directory_path', 'sites/default/resume') .'/image-'. $time;
+//$save = file_save_upload('picture_upload', array(), $dir, true);
+//$filename = $save->filename;
+
+	$suitable = 'NULL';
+	$recdate = date('m-d-y');   
+	$assigned_dept = $form_values['values']['locationofpost'];
+	$assigned_job =  $form_values['values']['applicationforthepostof'];
+	$job_title = $form_values['values']['applicationforthepostof'];
+	$job_location = $form_values['values']['locationofpost'];
+	$surname = $form_values['values']['Surname'];
+	$forname = $form_values['values']['forename'];
+	$title = $form_values['values']['selected_title'];
+	$email_add = $form_values['values']['email'];
+	$address = $form_values['values']['address'];
+	$phone_no = $form_values['values']['hometel'];
+	$mobile_no = $form_values['values']['mobilephone'];
+	$hear_about_us = $form_values['values']['wheredidyouhearus'];
+	$recommend = $form_values['values']['recommend'];
+	$current_drivers_lic = $form_values['values']['currend_driverslicense'];
+	$free_endorsement = $form_values['values']['free_endorsement'];
+	$free_endorsement_no_details = $form_values['values']['free_endorsement_no_details'];
+	$meansoftransport = $form_values['values']['meansoftransport'];
+	$preparedtodrivepatient = $form_values['values']['preparedtodrivepatient'];
+	$preparedtodrivepatient_no = $form_values['values']['preparedtodrivepatient_no'];
+	$nationalinsuranceno = $form_values['values']['nationalinsuranceno'];
+	$previousworkus = $form_values['values']['previousworkus'];
+	$previousworkus_yes = $form_values['values']['previousworkus_yes'];
+	$organisation = $form_values['values']['organisation'];
+	$will_work_other = $form_values['values']['will_work_other'];
+	$fulltime_work = $form_values['values']['fulltime_work'];
+	$part_time_details = $form_values['values']['part_time_details'];
+	$date_available = $form_values['values']['date_available'];
+	$present_employment = $form_values['values']['present_employment'];
+	
+	$employer_details = $form_values['values']['employer_details'];
+	$position_held = $form_values['values']['position_held'];
+	$reason_leaving = $form_values['values']['reason_leaving'];
+	$emp_date_from = $form_values['values']['emp_date_from'];
+	
+	$employer_details_tw = $form_values['values']['employer_details_tw'];
+	$position_held_tw = $form_values['values']['position_held_tw'];
+	$reason_leaving_tw = $form_values['values']['reason_leaving_tw'];
+	$emp_date_from_tw = $form_values['values']['emp_date_from_tw'];
+	
+	$employer_details_th = $form_values['values']['employer_details_th'];
+	$position_held_th = $form_values['values']['position_held_th'];
+	$reason_leaving_th = $form_values['values']['reason_leaving_th'];
+	$emp_date_from_th = $form_values['values']['emp_date_from_th'];
+	
+	$support_application = $form_values['values']['support_application'];
+	
+	$he_examination = $form_values['values']['he_examination'];
+	$he_level = $form_values['values']['he_level'];
+	$he_subject = $form_values['values']['he_subject'];
+	$he_grade = $form_values['values']['he_grade'];
+	
+	$he_examination_tw = $form_values['values']['he_examination_tw'];
+	$he_level_tw = $form_values['values']['he_level_tw'];
+	$he_subject_tw = $form_values['values']['he_subject_tw'];
+	$he_grade_tw = $form_values['values']['he_grade_tw'];
+	
+	$u_namelocation = $form_values['values']['u_namelocation'];
+	$u_qualification = $form_values['values']['u_qualification'];
+	$u_grade = $form_values['values']['u_grade'];
+	
+	$u_namelocation_tw = $form_values['values']['u_namelocation_tw'];
+	$u_qualification_tw = $form_values['values']['u_qualification_tw'];
+	$u_grade_tw = $form_values['values']['u_grade_tw'];
+	
+	$professional_qual = $form_values['values']['professional_qual'];
+	$conviction = $form_values['values']['conviction'];
+	$conviction_details = $form_values['values']['conviction_details'];
+	$disciplinary_actions = $form_values['values']['disciplinary_actions'];
+	$disciplinary_details = $form_values['values']['disciplinary_details'];
+	$ongoing_investigation = $form_values['values']['ongoing_investigation'];
+	$ongoing_investigation_details = $form_values['values']['ongoing_investigation_details'];
+	$reference1_name = $form_values['values']['reference1_name'];
+	$reference1_occupation = $form_values['values']['reference1_occupation'];
+	$reference1_telno = $form_values['values']['reference1_telno'];
+	$reference1_address = $form_values['values']['reference1_address'];
+	$reference1_email = $form_values['values']['reference1_email'];
+	$reference2_name = $form_values['values']['reference2_name'];
+	$reference2_occupation = $form_values['values']['reference2_occupation'];
+	$reference2_telno = $form_values['values']['reference2_telno'];
+	$reference2_email = $form_values['values']['reference2_email'];
+	$reference2_address = $form_values['values']['reference2_address'];
+	//$filename = $filename;
+	$downloaded = 0;
+	
+	
+	db_query("INSERT INTO {application_form} 
+
+	( `appid`,
+	`suitable`,
+	`assigned_dept`,	
+	`assigned_job`,	
+	`job_title`,
+	`job_location`,
+	`surname`,
+	`forname`,
+	`title`,
+	`email_add`,
+	`address`,
+	`phone_no`,
+	`mobile_no`,
+	`hear_about_us`,
+	`recommend`,
+	`current_drivers_lic`,
+	`free_endorsement`,
+	`free_endorsement_no_details`,
+	`own_means_transpo`,
+	`preparedtodrivepatient`,
+	`preparedtodrivepatient_no`,
+	`nationalinsuranceno`,
+	`previousworkus`,
+	`previousworkus_yes`,
+	`organisation`,
+	`will_work_other`,
+	`fulltime_work`,
+	`part_time_details`,
+	`date_available`,
+	`present_employment`,
+	
+	`employer_details`,
+	`position_held`,
+	`reason_leaving`,
+	`emp_date_from`,
+	
+	`employer_details_two`,
+	`position_held_two`,
+	`reason_leaving_two`,
+	`emp_date_from_two`,
+	
+	`employer_details_thr`,
+	`position_held_thr`,
+	`reason_leaving_thr`,
+	`emp_date_from_thr`,
+	
+	`support_application`,
+	`he_examination`,
+	`he_level`,
+	`he_subject`,
+	`he_grade`,
+	
+	`he_examination_tw`,
+	`he_level_tw`,
+	`he_subject_tw`,
+	`he_grade_tw`,
+	
+	`u_namelocation`,
+	`u_qualification`,
+	`u_grade`,
+	
+	`u_namelocation_tw`,
+	`u_qualification_tw`,
+	`u_grade_tw`,
+	
+	
+	`professional_qual`,
+	`conviction`,
+	`conviction_details`,
+	`disciplinary_actions`,
+	`disciplinary_details`,
+	`ongoing_investigation`,
+	`ongoing_investigation_details`,
+	`reference1_name`,
+	`reference1_occupation`,
+	`reference1_email`,
+	`reference1_telno`,
+	`reference1_address`,
+	`reference2_name`,
+	`reference2_telno`,
+	`reference2_occupation`,
+	`reference2_address`,
+	`reference2_email`,
+	`downloaded`,
+	`recdate`
+	)
+
+	VALUES
+	
+	(NULL , 
+	'$suitable',
+	'$assigned_dept' ,
+	'$assigned_job', 
+	'$job_title',
+	'$job_location',
+	'$surname',
+	'$forname',
+	'$title',
+	'$email_add',
+	'$address',
+	'$phone_no',
+	'$mobile_no',
+	'$hear_about_us',
+	'$recommend',
+	'$current_drivers_lic',
+	'$free_endorsement',
+	'$free_endorsement_no_details',
+	'$meansoftransport',
+	'$preparedtodrivepatient',
+	'$preparedtodrivepatient_no',
+	'$nationalinsuranceno',
+	'$previousworkus',
+	'$previousworkus_yes',
+	'$organisation',
+	'$will_work_other',
+	'$fulltime_work',
+	'$part_time_details',
+	'$date_available',
+	'$present_employment',
+	
+	'$employer_details',
+	'$position_held',
+	'$reason_leaving',
+	'$emp_date_from',
+	
+	'$employer_details_tw',
+	'$position_held_tw',
+	'$reason_leaving_tw',
+	'$emp_date_from_tw',
+	
+	'$employer_details_th',
+	'$position_held_th',
+	'$reason_leaving_th',
+	'$emp_date_from_th',
+	
+	'$support_application',
+	
+	'$he_examination',
+	'$he_level',
+	'$he_subject',
+	'$he_grade',
+	
+	'$he_examination_tw',
+	'$he_level_tw',
+	'$he_subject_tw',
+	'$he_grade_tw',
+	
+	'$u_namelocation',
+	'$u_qualification',
+	'$u_grade',
+	
+	'$u_namelocation_tw',
+	'$u_qualification_tw',
+	'$u_grade_tw',
+	
+
+	'$professional_qual',
+	'$conviction',
+	'$conviction_details',
+	'$disciplinary_actions',
+	'$disciplinary_details',
+	'$ongoing_investigation',
+	'$ongoing_investigation_details',
+	'$reference1_name',
+	'$reference1_occupation',
+	'$reference1_email',
+	'$reference1_telno',
+	'$reference1_address',
+	'$reference2_name',
+	'$reference2_telno',
+	'$reference2_occupation',
+	'$reference2_address',
+	'$reference2_email',
+	'$downloaded',
+	'$recdate')");	
+	
+	$q = db_query('SELECT * FROM {users} WHERE mail = :mail', array(':mail' => $email_add));
+	foreach ($q as $row){
+		$gg = $row->mail;
+	}
+	
+	if($gg == null){
+		drupal_goto("user/register/&?ea=$email_add/&=$forname/&=$surname/&=$phone_no", array('fragment' => $node->nid));
+	}else{
+		drupal_goto("thank-you", array('fragment' => $node->nid));
+	}
+
+}
+
+
+
+

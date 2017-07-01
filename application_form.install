@@ -1,0 +1,469 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * The install file of application_form
+ */
+
+/**
+ * Implements hook_schema().
+ *
+ * Will create the database needed to store the banner connections
+ */
+function application_form_schema() {
+  $schema['application_form'] = array(
+    'description' => 'The table for the path to banner relationship',
+    'fields' => array(
+      'appid' => array(
+        'description' => 'The primary key always unique',
+        'type'        => 'serial',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+	     'suitable' => array(
+        'description' => 'suitable',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => TRUE,
+      ),
+	     'assigned_dept' => array(
+        'description' => 'assigned_dept',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => TRUE,
+      ),
+	  
+	     'assigned_job' => array(
+        'description' => 'assigned_job',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => TRUE,
+      ),
+	  
+	  
+	  
+      'job_title' => array(
+        'description' => 'the job title',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => TRUE,
+      ),
+      'job_location' => array(
+        'description' => 'job location',
+        'type'        => 'varchar',
+        'length'      => '100',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	  'surname' => array(
+        'description' => 'surname of the applicant',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	   'forname' => array(
+        'description' => 'name of the applicant',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	   'title' => array(
+        'description' => 'title of the applicant',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+      'email_add' => array(
+        'description' => 'the title of the applicant',
+        'type'        => 'varchar',
+        'length'      => '200',
+        'not null'    => FALSE,
+      ),
+      'address' => array(
+        'description' => 'complete address of the applicant',
+        'type'        => 'text',
+        'length'      => '1000',
+        'not null'    => FALSE,
+      ),
+      'phone_no' => array(
+        'description' => 'The phone number of the applicant',
+        'type'        => 'varchar',
+        'length'      => '30',
+        'not null'    => FALSE,
+      ),
+      'mobile_no' => array(
+        'description' => 'mobile number of the applicants',
+        'type'        => 'varchar',
+        'length'      => '30',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+      'hear_about_us' => array(
+        'description' => 'Where did you hear about us',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	   'recommend' => array(
+        'description' => 'Were you recommended by anyone',
+        'type'        => 'varchar',
+        'length'      => '1000',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	   'current_drivers_lic' => array(
+        'description' => 'Do you have a full current driving licence?',
+        'type'        => 'varchar',
+        'length'      => '100',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	  'free_endorsement' => array(
+        'description' => 'Is it free of endorsements?',
+        'type'        => 'varchar',
+        'length'      => '100',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	  'free_endorsement_no_details' => array(
+        'description' => 'If NO, give details endorsement',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	   'own_means_transpo' => array(
+        'description' => 'Do you have own means of transportation',
+        'type'        => 'varchar',
+        'length'      => '10',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	   'preparedtodrivepatient' => array(
+        'description' => 'Would you be prepared to drive patients/tenants/service users offsite in company vehicles?',
+        'type'        => 'varchar',
+        'length'      => '10',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	   'preparedtodrivepatient_no' => array(
+        'description' => 'Drive patience no details',
+        'type'        => 'varchar',
+        'length'      => '1000',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	   'nationalinsuranceno' => array(
+        'description' => 'National Insurance no',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	   'previousworkus' => array(
+        'description' => 'Have you previously worked for us?',
+        'type'        => 'varchar',
+        'length'      => '10',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	  'previousworkus_yes' => array(
+        'description' => 'Have you previously worked for us details',
+        'type'        => 'varchar',
+        'length'      => '1000',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'organisation' => array(
+        'description' => 'related to any employee of this organisation? If so, please give details.',
+        'type'        => 'varchar',
+        'length'      => '1000',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'will_work_other' => array(
+        'description' => 'will you continue to work in other',
+        'type'        => 'varchar',
+        'length'      => '10',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'fulltime_work' => array(
+        'description' => 'Work Full Time',
+        'type'        => 'varchar',
+        'length'      => '10',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'part_time_details' => array(
+        'description' => 'If your application is for part time employment, please state days/hours preferred.',
+        'type'        => 'varchar',
+        'length'      => '1000',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'date_available' => array(
+        'description' => 'date availability',
+        'type'        => 'varchar',
+        'length'      => '20',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'present_employment' => array(
+        'description' => 'Present Employment details',
+        'type'        => 'varchar',
+        'length'      => '1000',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'employer_details' => array(
+        'description' => 'employer name address and nature of business',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'position_held' => array(
+        'description' => 'position held',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'reason_leaving' => array(
+        'description' => 'Reason for leaving',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'emp_date_from' => array(
+        'description' => 'Date From',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'support_application' => array(
+        'description' => 'Support of Application',
+        'type'        => 'varchar',
+        'length'      => '2000',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'he_examination' => array(
+        'description' => 'higher educ examination',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'he_level' => array(
+        'description' => 'higher educ level',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'he_subject' => array(
+        'description' => 'higher educ subject',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	     'he_grade' => array(
+        'description' => 'higher educ grade',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	     'u_namelocation' => array(
+        'description' => 'university name location',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	     'u_qualification' => array(
+        'description' => 'university qualification gained',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'u_grade' => array(
+        'description' => 'university grade',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'professional_qual' => array(
+        'description' => 'professional qualification membership organisation list',
+        'type'        => 'text',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'conviction' => array(
+        'description' => 'ever been convicted by the courts or cautioned',
+        'type'        => 'varchar',
+        'length'      => '10',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'conviction_details' => array(
+        'description' => 'conviction details',
+        'type'        => 'varchar',
+        'length'      => '1000',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'disciplinary_actions' => array(
+        'description' => 'disciplinary action',
+        'type'        => 'varchar',
+        'length'      => '10',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	   'disciplinary_details' => array(
+        'description' => 'disciplinary action',
+        'type'        => 'varchar',
+        'length'      => '1000',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'ongoing_investigation' => array(
+        'description' => 'ongoing investigation',
+        'type'        => 'varchar',
+        'length'      => '10',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'ongoing_investigation_details' => array(
+        'description' => 'ongoing investigation details',
+        'type'        => 'varchar',
+        'length'      => '1000',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'reference1_name' => array(
+        'description' => 'reference1 name',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	   'reference1_occupation' => array(
+        'description' => 'reference1 occupation',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'reference1_telno' => array(
+        'description' => 'reference1 telno',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'reference1_address' => array(
+        'description' => 'reference1 address',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	 
+	    'reference1_email' => array(
+        'description' => 'reference1 email',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	  
+	  
+	     'reference2_name' => array(
+        'description' => 'reference1 name',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'reference2_telno' => array(
+        'description' => 'reference1 telno',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'reference2_address' => array(
+        'description' => 'reference1 address',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'reference2_occupation' => array(
+        'description' => 'reference1 occupation',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'reference2_email' => array(
+        'description' => 'reference1 email',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	    'file' => array(
+        'description' => 'uploadedfile',
+        'type'        => 'varchar',
+        'length'      => '255',
+        'not null'    => FALSE,
+		'default'     => NULL,
+      ),
+	   
+    ),
+    'primary key' => array('appid'),
+  );
+  return $schema;
+}
+
+/**
+ * Implements hook_install().
+ */
+function application_form_install() {
+  // The drupal_(un)install_schema functions are called automatically in D7.
+
+  // default settings install
+  variable_set('application_form_display_setting', 'urltext');
+  variable_set('application_form_display_errors', FALSE);
+  variable_set('application_form_file_save_path', BANNER_DEFAULT_SAVE_LOCATION);
+
+  drupal_set_message(st('Application Form Module installed successfully.'), 'warning');
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function application_form_uninstall() {
+  // The drupal_(un)install_schema functions are called automatically in D7.
+
+  // default settings remove
+  variable_del('application_form_display_setting');
+  variable_del('application_form_display_errors');
+  variable_del('application_form_file_save_path');
+
+  drupal_set_message(st('Application Form Module uninstalled successfully.'), 'warning');
+}

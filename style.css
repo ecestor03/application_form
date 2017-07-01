@@ -1,0 +1,5 @@
+#tabs-wrapper tr td{
+	border:1px solid #ccc;
+}
+
+#applicantstbl tr#recno1{background:#ccc}
